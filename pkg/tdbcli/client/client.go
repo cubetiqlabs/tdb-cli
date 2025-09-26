@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	versionpkg "cubetiqlabs/tinydb/pkg/tdbcli/version"
 )
 
 type httpDoer interface {
@@ -91,6 +93,9 @@ func (b *baseClient) newJSONRequest(ctx context.Context, method, path string, pa
 	req.Header.Set("Accept", "application/json")
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	if req.Header.Get("User-Agent") == "" {
+		req.Header.Set("User-Agent", versionpkg.UserAgent())
 	}
 	return req, nil
 }

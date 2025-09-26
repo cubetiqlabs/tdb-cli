@@ -10,6 +10,7 @@ import (
 
 	clientpkg "cubetiqlabs/tinydb/pkg/tdbcli/client"
 	configpkg "cubetiqlabs/tinydb/pkg/tdbcli/config"
+	versionpkg "cubetiqlabs/tinydb/pkg/tdbcli/version"
 )
 
 func registerAdminCommands(root *cobra.Command, env *Environment) {
@@ -208,19 +209,23 @@ func newAdminKeyCreateCommand(env *Environment) *cobra.Command {
 				v := strings.TrimSpace(appID)
 				req.AppID = &v
 			}
-			if strings.TrimSpace(description) != "" {
-				v := strings.TrimSpace(description)
-				req.Description = &v
+			desc := strings.TrimSpace(description)
+			if desc == "" {
+				desc = versionpkg.DefaultAPIKeyDescription()
 			}
+			descCopy := desc
+			req.Description = &descCopy
 			generated, err := client.GenerateKey(cmd.Context(), tenantIDTrim, req)
 			if err != nil {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Generated key: %s (prefix %s)\n", generated.APIKey, generated.Prefix)
 			if strings.TrimSpace(saveAlias) != "" {
-				entry := configpkg.APIKeyEntry{Key: generated.APIKey, Prefix: generated.Prefix}
+				entry := configpkg.APIKeyEntry{Key: generated.APIKey, Prefix: generated.Prefix, Description: desc}
 				if generated.Description != nil {
-					entry.Description = *generated.Description
+					if trimmed := strings.TrimSpace(*generated.Description); trimmed != "" {
+						entry.Description = trimmed
+					}
 				}
 				if generated.AppID != nil {
 					entry.AppID = *generated.AppID
