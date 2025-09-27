@@ -298,7 +298,6 @@ tdb tenant auth --tenant tenant_123 --key checkout
 ```
 
 Pass `--raw` to inspect the raw `/api/me` payload or `--app-id` to override the scoped application when testing aliases.
-```
 
 ## Output and color
 
@@ -312,3 +311,41 @@ The CLI renders unicode tables with alternating row styles when stdout is a TTY.
 -   Add `--config /path/to/test.yaml` to work with disposable configs during automation
 
 With the basics configured you can script `tdb` in CI/CD pipelines or on your workstation to automate TinyDB tenant onboarding and application management.
+
+## Shell Completion
+
+The `tdb` CLI supports shell completion for Bash and Zsh.
+
+### Bash
+
+To enable completion for the current session:
+
+```bash
+tdb completion bash | source /dev/stdin
+```
+
+To enable completion for all sessions:
+
+- **Linux:**
+  ```bash
+  tdb completion bash > /etc/bash_completion.d/tdb
+  ```
+- **macOS (Homebrew):**
+  ```bash
+  tdb completion bash > /usr/local/etc/bash_completion.d/tdb
+  ```
+
+### Zsh
+
+To enable completion for the current session:
+
+```zsh
+autoload -U compinit; compinit
+tdb completion zsh | source /dev/stdin
+```
+
+To enable completion for all sessions, add to your `~/.zshrc`:
+
+```zsh
+tdb completion zsh > "${fpath[1]}/_tdb"
+```

@@ -67,13 +67,27 @@ func (b *baseClient) buildURL(path string) string {
 	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
 		return path
 	}
-	// Ensure we preserve base path
-	rel := strings.TrimPrefix(path, "/")
+
+	trimmed := strings.TrimPrefix(path, "/")
+	rawQuery := ""
+	if idx := strings.Index(trimmed, "?"); idx != -1 {
+		rawQuery = trimmed[idx+1:]
+		trimmed = trimmed[:idx]
+	}
+
 	clone := *b.baseURL
 	if !strings.HasSuffix(clone.Path, "/") {
 		clone.Path += "/"
 	}
-	clone.Path = strings.TrimSuffix(clone.Path, "/") + "/" + rel
+	basePath := strings.TrimSuffix(clone.Path, "/")
+	if trimmed != "" {
+		basePath = basePath + "/" + trimmed
+	}
+	clone.Path = basePath
+	clone.RawQuery = rawQuery
+	if rawQuery == "" {
+		clone.RawQuery = ""
+	}
 	return clone.String()
 }
 
