@@ -52,7 +52,25 @@ func registerTenantCommands(root *cobra.Command, env *Environment) {
 	documentsCmd.AddCommand(newTenantDocumentsDeleteCommand(env))
 	documentsCmd.AddCommand(newTenantDocumentsBulkCreateCommand(env))
 	documentsCmd.AddCommand(newTenantDocumentsCountCommand(env))
+	documentsCmd.AddCommand(newTenantDocumentsExportCommand(env))
 	tenantCmd.AddCommand(documentsCmd)
+
+	queriesCmd := &cobra.Command{
+		Use:   "queries",
+		Short: "Manage saved queries",
+	}
+	queriesCmd.AddCommand(newTenantQueriesListCommand(env))
+	queriesCmd.AddCommand(newTenantQueriesGetCommand(env))
+	queriesCmd.AddCommand(newTenantQueriesCreateCommand(env))
+	queriesCmd.AddCommand(newTenantQueriesPutCommand(env))
+	queriesCmd.AddCommand(newTenantQueriesPatchCommand(env))
+	queriesCmd.AddCommand(newTenantQueriesExecuteCommand(env))
+	queriesCmd.AddCommand(newTenantQueriesDeleteCommand(env))
+	queriesCmd.AddCommand(newTenantQueriesParamsTemplateCommand(env))
+	tenantCmd.AddCommand(queriesCmd)
+
+	authCmd := newTenantAuthCommand(env)
+	tenantCmd.AddCommand(authCmd)
 
 	root.AddCommand(tenantCmd)
 }

@@ -1,6 +1,9 @@
 package client
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // Tenant represents a tenant payload returned by the admin API.
 type Tenant struct {
@@ -93,6 +96,40 @@ type DocumentListResponse struct {
 // DocumentBulkResponse is returned by bulk create endpoints.
 type DocumentBulkResponse struct {
 	Items []Document `json:"items"`
+}
+
+// SavedQuery represents the inner payload of a saved query document.
+type SavedQuery struct {
+	Name       string          `json:"name"`
+	Type       string          `json:"type"`
+	Collection string          `json:"collection,omitempty"`
+	DSL        json.RawMessage `json:"dsl,omitempty"`
+	SQL        string          `json:"sql,omitempty"`
+}
+
+// SavedQueryListResponse captures the saved query listing payload.
+type SavedQueryListResponse struct {
+	Items []Document `json:"items"`
+}
+
+// SavedQueryExecutionResult contains the result rows when executing a saved query.
+type SavedQueryExecutionResult struct {
+	Items []map[string]any `json:"items"`
+}
+
+// SavedQueryPatchRequest is used when partially updating a saved query by name.
+type SavedQueryPatchRequest map[string]any
+
+// AuthStatus represents the payload returned by GET /api/me.
+type AuthStatus struct {
+	TenantID   string     `json:"tenant_id"`
+	TenantName string     `json:"tenant_name"`
+	AppID      string     `json:"app_id"`
+	AppName    string     `json:"app_name"`
+	Status     string     `json:"status"`
+	CreatedAt  *time.Time `json:"created_at,omitempty"`
+	LastUsed   *time.Time `json:"last_used,omitempty"`
+	Scope      string     `json:"scope,omitempty"`
 }
 
 // ListDocumentsParams configures document list queries.

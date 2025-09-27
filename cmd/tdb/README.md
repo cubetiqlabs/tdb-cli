@@ -253,6 +253,51 @@ tdb tenant documents bulk-create inventory --tenant tenant_123 --key checkout --
 
 # purge a document permanently
 tdb tenant documents delete inventory doc_001 --tenant tenant_123 --key checkout --purge --confirm
+
+# export a collection to a file
+tdb tenant documents export inventory \
+  --tenant tenant_123 --key checkout \
+  --out ./inventory.jsonl --format jsonl --include-meta
+
+```
+
+Manage saved queries:
+
+```bash
+# list saved queries
+tdb tenant queries list --tenant tenant_123 --key checkout
+
+# create or upsert from JSON file
+tdb tenant queries create \
+  --tenant tenant_123 --key checkout \
+  --file ./queries/daily_sales.json
+
+# replace an existing query by name
+tdb tenant queries put daily_sales \
+  --tenant tenant_123 --key checkout \
+  --file ./queries/daily_sales.json
+
+# execute by name with runtime parameters
+tdb tenant queries execute daily_sales \
+  --tenant tenant_123 --key checkout --by-name \
+  --params '{"params":{"date_from":"2025-09-01","date_to":"2025-09-30"}}'
+
+# delete or purge a saved query (by name or id)
+tdb tenant queries delete daily_sales \
+  --tenant tenant_123 --key checkout --by-name --purge --confirm
+
+# scaffold a params payload for local editing
+tdb tenant queries params-template daily_sales \
+  --tenant tenant_123 --key checkout --by-name --out ./queries/daily_sales.params.json
+```
+
+Validate your API key configuration at any time:
+
+```bash
+tdb tenant auth --tenant tenant_123 --key checkout
+```
+
+Pass `--raw` to inspect the raw `/api/me` payload or `--app-id` to override the scoped application when testing aliases.
 ```
 
 ## Output and color

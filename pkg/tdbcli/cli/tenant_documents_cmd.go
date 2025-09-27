@@ -1,10 +1,14 @@
 package cli
 
 import (
+	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -428,6 +432,197 @@ func newTenantDocumentsCountCommand(env *Environment) *cobra.Command {
 	return cmd
 }
 
+func newTenantDocumentsExportCommand(env *Environment) *cobra.Command {
+	var auth authFlags
+	var filters []string
+	var selectFields string
+	var includeDeleted bool
+	var outPath string
+	var format string
+	var pretty bool
+	var includeMeta bool
+	var pageSize int
+
+	cmd := &cobra.Command{
+		Use:   "export <collection>",
+		Short: "Export documents to stdout or a file",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			envCtx, err := requireEnvironment(env)
+			if err != nil {
+				return err
+			}
+			tenantClient, _, _, err := auth.resolveTenantClient(envCtx, cmd)
+			if err != nil {
+				return err
+			}
+			collection := strings.TrimSpace(args[0])
+			if collection == "" {
+				return errors.New("collection name cannot be empty")
+			}
+			page := pageSize
+			if page <= 0 {
+				page = 100
+			}
+			mode := strings.ToLower(strings.TrimSpace(format))
+			if mode == "" {
+				mode = "jsonl"
+			}
+			if mode != "jsonl" && mode != "json" {
+				return fmt.Errorf("unsupported format %q (choose json or jsonl)", mode)
+			}
+			filtersMap := make(map[string]string)
+			for _, f := range filters {
+				parts := strings.SplitN(f, "=", 2)
+				if len(parts) != 2 {
+					return fmt.Errorf("invalid filter %q, expected key=value", f)
+				}
+				key := strings.TrimSpace(parts[0])
+				value := strings.TrimSpace(parts[1])
+				if key == "" {
+					return fmt.Errorf("filter key cannot be empty: %q", f)
+				}
+				filtersMap[key] = value
+			}
+			selector := splitCommaList(selectFields)
+			targetPath := strings.TrimSpace(outPath)
+			var writer *bufio.Writer
+			var file *os.File
+			if targetPath != "" {
+				cleanPath := filepath.Clean(targetPath)
+				dir := filepath.Dir(cleanPath)
+				if dir != "." && dir != "" {
+					if err := os.MkdirAll(dir, 0o755); err != nil {
+						return fmt.Errorf("create output directory: %w", err)
+					}
+				}
+				file, err = os.Create(cleanPath)
+				if err != nil {
+					return err
+				}
+				writer = bufio.NewWriter(file)
+				defer func() {
+					_ = writer.Flush()
+					_ = file.Close()
+				}()
+			} else {
+				writer = bufio.NewWriter(cmd.OutOrStdout())
+				defer writer.Flush()
+			}
+			jsonFormat := mode == "json"
+			first := true
+			if jsonFormat {
+				if _, err := writer.WriteString("["); err != nil {
+					return err
+				}
+				if pretty {
+					if _, err := writer.WriteString("\n"); err != nil {
+						return err
+					}
+				}
+			}
+			written := 0
+			offset := 0
+			for {
+				params := clientpkg.ListDocumentsParams{
+					AppID:          auth.appID,
+					Limit:          page,
+					Offset:         offset,
+					IncludeDeleted: includeDeleted,
+					Filters:        make(map[string]string, len(filtersMap)),
+				}
+				for k, v := range filtersMap {
+					params.Filters[k] = v
+				}
+				if len(selector) > 0 {
+					params.SelectFields = selector
+				}
+				resp, err := tenantClient.ListDocuments(cmd.Context(), collection, params)
+				if err != nil {
+					return err
+				}
+				if len(resp.Items) == 0 {
+					break
+				}
+				for _, doc := range resp.Items {
+					payload, err := buildExportPayload(doc, includeMeta, pretty)
+					if err != nil {
+						return fmt.Errorf("prepare document %s: %w", doc.ID, err)
+					}
+					if jsonFormat {
+						if !first {
+							if pretty {
+								if _, err := writer.WriteString(",\n"); err != nil {
+									return err
+								}
+							} else {
+								if _, err := writer.WriteString(","); err != nil {
+									return err
+								}
+							}
+						} else {
+							first = false
+						}
+						if _, err := writer.Write(payload); err != nil {
+							return err
+						}
+						if pretty {
+							if _, err := writer.WriteString("\n"); err != nil {
+								return err
+							}
+						}
+					} else {
+						if _, err := writer.Write(payload); err != nil {
+							return err
+						}
+						if _, err := writer.WriteString("\n"); err != nil {
+							return err
+						}
+					}
+					written++
+				}
+				offset += len(resp.Items)
+				if len(resp.Items) < page {
+					break
+				}
+			}
+			if jsonFormat {
+				if !first && pretty {
+					if _, err := writer.WriteString("]\n"); err != nil {
+						return err
+					}
+				} else {
+					if _, err := writer.WriteString("]"); err != nil {
+						return err
+					}
+					if pretty {
+						if _, err := writer.WriteString("\n"); err != nil {
+							return err
+						}
+					}
+				}
+			}
+			statusOut := cmd.ErrOrStderr()
+			if targetPath != "" {
+				fmt.Fprintf(statusOut, "Exported %d documents to %s\n", written, targetPath)
+			} else {
+				fmt.Fprintf(statusOut, "Exported %d documents\n", written)
+			}
+			return nil
+		},
+	}
+	auth.bindWithApp(cmd)
+	cmd.Flags().StringArrayVar(&filters, "filter", nil, "Filter predicate in the form field=value (repeatable)")
+	cmd.Flags().StringVar(&selectFields, "select", "", "Comma-separated list of fields to project")
+	cmd.Flags().BoolVar(&includeDeleted, "include-deleted", false, "Include soft-deleted documents")
+	cmd.Flags().StringVar(&outPath, "out", "", "Write output to the specified file (defaults to stdout)")
+	cmd.Flags().StringVar(&format, "format", "jsonl", "Output format: jsonl or json")
+	cmd.Flags().BoolVar(&pretty, "pretty", false, "Pretty-print JSON output")
+	cmd.Flags().BoolVar(&includeMeta, "include-meta", false, "Include document metadata alongside payload data")
+	cmd.Flags().IntVar(&pageSize, "page-size", 100, "Number of documents to fetch per page")
+	return cmd
+}
+
 func splitCommaList(value string) []string {
 	parts := strings.Split(value, ",")
 	var result []string
@@ -449,4 +644,37 @@ func jsonStringToInterface(raw string) interface{} {
 		return anyValue
 	}
 	return trimmed
+}
+
+func buildExportPayload(doc clientpkg.Document, includeMeta bool, pretty bool) ([]byte, error) {
+	if includeMeta {
+		payload := map[string]any{
+			"id":            doc.ID,
+			"tenant_id":     doc.TenantID,
+			"collection_id": doc.CollectionID,
+			"key":           doc.Key,
+			"created_at":    doc.CreatedAt.Format(time.RFC3339Nano),
+			"updated_at":    doc.UpdatedAt.Format(time.RFC3339Nano),
+			"data":          jsonStringToInterface(doc.Data),
+		}
+		if doc.KeyNumeric != nil {
+			payload["key_numeric"] = *doc.KeyNumeric
+		}
+		if doc.DeletedAt != nil {
+			payload["deleted_at"] = doc.DeletedAt.Format(time.RFC3339Nano)
+		}
+		if pretty {
+			return json.MarshalIndent(payload, "", "  ")
+		}
+		return json.Marshal(payload)
+	}
+	if !pretty {
+		trimmed := strings.TrimSpace(doc.Data)
+		if trimmed == "" {
+			return []byte("null"), nil
+		}
+		return []byte(trimmed), nil
+	}
+	value := jsonStringToInterface(doc.Data)
+	return json.MarshalIndent(value, "", "  ")
 }

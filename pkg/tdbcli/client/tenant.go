@@ -367,6 +367,230 @@ func (c *TenantClient) BulkCreateDocuments(ctx context.Context, collection strin
 	return &resp, nil
 }
 
+// ListSavedQueries returns saved query documents stored under the tenant's saved_queries collection.
+func (c *TenantClient) ListSavedQueries(ctx context.Context, appID string) ([]Document, error) {
+	path := "/api/queries"
+	values := url.Values{}
+	if trimmed := strings.TrimSpace(appID); trimmed != "" {
+		values.Set("app_id", trimmed)
+	}
+	if encoded := values.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	req, err := c.newJSONRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.authorize(req)
+	c.applyAppScope(req, appID)
+	var resp SavedQueryListResponse
+	if err := c.do(req, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Items, nil
+}
+
+// GetSavedQuery fetches a saved query document by ID.
+func (c *TenantClient) GetSavedQuery(ctx context.Context, id, appID string) (*Document, error) {
+	values := url.Values{}
+	if trimmed := strings.TrimSpace(appID); trimmed != "" {
+		values.Set("app_id", trimmed)
+	}
+	path := fmt.Sprintf("/api/queries/%s", url.PathEscape(id))
+	if encoded := values.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	req, err := c.newJSONRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.authorize(req)
+	c.applyAppScope(req, appID)
+	var doc Document
+	if err := c.do(req, &doc); err != nil {
+		return nil, err
+	}
+	return &doc, nil
+}
+
+// GetSavedQueryByName fetches a saved query document by its canonical name.
+func (c *TenantClient) GetSavedQueryByName(ctx context.Context, name, appID string) (*Document, error) {
+	values := url.Values{}
+	if trimmed := strings.TrimSpace(appID); trimmed != "" {
+		values.Set("app_id", trimmed)
+	}
+	path := fmt.Sprintf("/api/queries/name/%s", url.PathEscape(name))
+	if encoded := values.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	req, err := c.newJSONRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.authorize(req)
+	c.applyAppScope(req, appID)
+	var doc Document
+	if err := c.do(req, &doc); err != nil {
+		return nil, err
+	}
+	return &doc, nil
+}
+
+// CreateSavedQuery creates or upserts a saved query document.
+func (c *TenantClient) CreateSavedQuery(ctx context.Context, payload []byte, appID string) (*Document, error) {
+	req, err := c.newJSONRequest(ctx, http.MethodPost, "/api/queries", jsonRaw(payload))
+	if err != nil {
+		return nil, err
+	}
+	c.authorize(req)
+	c.applyAppScope(req, appID)
+	var doc Document
+	if err := c.do(req, &doc); err != nil {
+		return nil, err
+	}
+	return &doc, nil
+}
+
+// PutSavedQuery fully replaces (or creates) a saved query by name.
+func (c *TenantClient) PutSavedQuery(ctx context.Context, name string, payload []byte, appID string) (*Document, error) {
+	values := url.Values{}
+	if trimmed := strings.TrimSpace(appID); trimmed != "" {
+		values.Set("app_id", trimmed)
+	}
+	path := fmt.Sprintf("/api/queries/name/%s", url.PathEscape(name))
+	if encoded := values.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	req, err := c.newJSONRequest(ctx, http.MethodPut, path, jsonRaw(payload))
+	if err != nil {
+		return nil, err
+	}
+	c.authorize(req)
+	c.applyAppScope(req, appID)
+	var doc Document
+	if err := c.do(req, &doc); err != nil {
+		return nil, err
+	}
+	return &doc, nil
+}
+
+// PatchSavedQuery performs a shallow merge into a saved query by name.
+func (c *TenantClient) PatchSavedQuery(ctx context.Context, name string, payload []byte, appID string) (*Document, error) {
+	values := url.Values{}
+	if trimmed := strings.TrimSpace(appID); trimmed != "" {
+		values.Set("app_id", trimmed)
+	}
+	path := fmt.Sprintf("/api/queries/name/%s", url.PathEscape(name))
+	if encoded := values.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	req, err := c.newJSONRequest(ctx, http.MethodPatch, path, jsonRaw(payload))
+	if err != nil {
+		return nil, err
+	}
+	c.authorize(req)
+	c.applyAppScope(req, appID)
+	var doc Document
+	if err := c.do(req, &doc); err != nil {
+		return nil, err
+	}
+	return &doc, nil
+}
+
+// ExecuteSavedQueryByID runs a saved query by its document ID.
+func (c *TenantClient) ExecuteSavedQueryByID(ctx context.Context, id string, payload []byte, appID string) (*SavedQueryExecutionResult, error) {
+	values := url.Values{}
+	if trimmed := strings.TrimSpace(appID); trimmed != "" {
+		values.Set("app_id", trimmed)
+	}
+	path := fmt.Sprintf("/api/queries/%s/execute", url.PathEscape(id))
+	if encoded := values.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	var body interface{}
+	if len(payload) > 0 {
+		body = jsonRaw(payload)
+	}
+	req, err := c.newJSONRequest(ctx, http.MethodPost, path, body)
+	if err != nil {
+		return nil, err
+	}
+	c.authorize(req)
+	c.applyAppScope(req, appID)
+	var result SavedQueryExecutionResult
+	if err := c.do(req, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// ExecuteSavedQueryByName runs a saved query by its canonical name.
+func (c *TenantClient) ExecuteSavedQueryByName(ctx context.Context, name string, payload []byte, appID string) (*SavedQueryExecutionResult, error) {
+	values := url.Values{}
+	if trimmed := strings.TrimSpace(appID); trimmed != "" {
+		values.Set("app_id", trimmed)
+	}
+	path := fmt.Sprintf("/api/queries/name/%s/execute", url.PathEscape(name))
+	if encoded := values.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	var body interface{}
+	if len(payload) > 0 {
+		body = jsonRaw(payload)
+	}
+	req, err := c.newJSONRequest(ctx, http.MethodPost, path, body)
+	if err != nil {
+		return nil, err
+	}
+	c.authorize(req)
+	c.applyAppScope(req, appID)
+	var result SavedQueryExecutionResult
+	if err := c.do(req, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// DeleteSavedQueryByID deletes or purges a saved query document by ID.
+func (c *TenantClient) DeleteSavedQueryByID(ctx context.Context, id string, purge bool, appID string, confirm bool) error {
+	if strings.TrimSpace(id) == "" {
+		return fmt.Errorf("saved query id is required")
+	}
+	if purge {
+		return c.PurgeDocument(ctx, "saved_queries", id, confirm, appID)
+	}
+	return c.DeleteDocument(ctx, "saved_queries", id, appID)
+}
+
+// DeleteSavedQueryByName deletes or purges a saved query document identified by name.
+func (c *TenantClient) DeleteSavedQueryByName(ctx context.Context, name string, purge bool, appID string, confirm bool) error {
+	canonical := strings.ToLower(strings.TrimSpace(name))
+	if canonical == "" {
+		return fmt.Errorf("saved query name is required")
+	}
+	doc, err := c.GetSavedQueryByName(ctx, canonical, appID)
+	if err != nil {
+		return err
+	}
+	return c.DeleteSavedQueryByID(ctx, doc.ID, purge, appID, confirm)
+}
+
+// AuthStatus retrieves the authentication context for the current API key via /api/me.
+func (c *TenantClient) AuthStatus(ctx context.Context, appID string) (*AuthStatus, error) {
+	path := "/api/me"
+	req, err := c.newJSONRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.authorize(req)
+	c.applyAppScope(req, appID)
+	var status AuthStatus
+	if err := c.do(req, &status); err != nil {
+		return nil, err
+	}
+	return &status, nil
+}
+
 type jsonRaw []byte
 
 func (r jsonRaw) MarshalJSON() ([]byte, error) {
