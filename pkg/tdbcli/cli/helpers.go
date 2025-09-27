@@ -31,6 +31,21 @@ func ensureEndpoint(env *Environment) (string, error) {
 	return endpoint, nil
 }
 
+func resolveTenantID(env *Environment, tenantID string) (string, error) {
+	envCtx, err := requireEnvironment(env)
+	if err != nil {
+		return "", err
+	}
+	resolved := strings.TrimSpace(tenantID)
+	if resolved == "" {
+		resolved = strings.TrimSpace(envCtx.Config.DefaultTenant)
+	}
+	if resolved == "" {
+		return "", errors.New("--tenant is required (set a default via `tdb config set default-tenant <tenant_id>`)")
+	}
+	return resolved, nil
+}
+
 func adminClientFromEnv(env *Environment) (*clientpkg.AdminClient, error) {
 	endpoint, err := ensureEndpoint(env)
 	if err != nil {

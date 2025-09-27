@@ -162,13 +162,12 @@ tdb admin tenants create \
   --tenant-name "Acme (NA)"
 ```
 
-Manage keys:
+Manage keys (defaults to the configured tenant when `--tenant` is omitted and will print which tenant is selected):
 
 ```bash
-tdb admin keys list --tenant tenant_123
+tdb admin keys list
 
 tdb admin keys create \
-  --tenant tenant_123 \
   --app-id webshop \
   --description "Checkout service" \
   --save-key-as checkout \
@@ -176,6 +175,7 @@ tdb admin keys create \
 
 tdb admin keys revoke key_prefix
 ```
+The `tdb admin keys list` table now includes **HAS APP**, **STATUS**, **CREATED**, **LAST USED**, and **REVOKED** columns with friendly timestamps. Pass `--hide-revoked` to omit revoked keys from the output when you only care about active credentials.
 
 ### Tenant commands
 

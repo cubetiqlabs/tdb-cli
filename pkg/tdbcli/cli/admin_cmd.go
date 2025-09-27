@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
 
 	clientpkg "cubetiqlabs/tinydb/pkg/tdbcli/client"
@@ -127,6 +128,7 @@ func newAdminTenantCreateCommand(env *Environment) *cobra.Command {
 func newAdminKeyListCommand(env *Environment) *cobra.Command {
 	var tenantID string
 	var appID string
+	var hideRevoked bool
 
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -136,9 +138,12 @@ func newAdminKeyListCommand(env *Environment) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			tenantIDTrim := strings.TrimSpace(tenantID)
-			if tenantIDTrim == "" {
-				return errors.New("--tenant is required")
+			tenantIDTrim, err := resolveTenantID(envCtx, tenantID)
+			if err != nil {
+				return err
+			}
+			if !cmd.Flags().Changed("tenant") {
+				fmt.Fprintf(cmd.OutOrStdout(), "Using default tenant %s\n", tenantIDTrim)
 			}
 			client, err := adminClientFromEnv(envCtx)
 			if err != nil {
@@ -159,23 +164,43 @@ func newAdminKeyListCommand(env *Environment) *cobra.Command {
 			}
 			rows := make([][]string, 0, len(keys))
 			for _, k := range keys {
+				if hideRevoked && k.RevokedAt != nil {
+					continue
+				}
 				scope := k.Scope
 				if scope == "application" && k.AppID != nil {
 					scope = scope + " (" + *k.AppID + ")"
 				}
-				revoked := ""
-				if k.RevokedAt != nil {
-					revoked = formatTime(*k.RevokedAt)
+				hasApp := "❌"
+				if k.AppID != nil && strings.TrimSpace(*k.AppID) != "" {
+					hasApp = "✅"
 				}
-				rows = append(rows, []string{k.Prefix, scope, optional(k.Description), formatTime(k.CreatedAt), revoked})
+				status := "Active"
+				revoked := "-"
+				if k.RevokedAt != nil {
+					status = "Revoked"
+					revoked = formatRelativeTimePtr(k.RevokedAt, "-")
+				}
+				created := formatTime(k.CreatedAt)
+				age := formatRelativeTime(k.CreatedAt, "-")
+				if age != "-" {
+					created = fmt.Sprintf("%s (%s)", created, age)
+				}
+				lastUsed := formatRelativeTimePtr(k.LastUsedAt, "never")
+				rows = append(rows, []string{k.Prefix, scope, optional(k.Description), hasApp, status, created, lastUsed, revoked})
 			}
-			renderTable(cmd, []string{"PREFIX", "SCOPE", "DESCRIPTION", "CREATED", "REVOKED"}, rows)
+			if len(rows) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No keys found (all revoked keys hidden)")
+				return nil
+			}
+			renderTable(cmd, []string{"PREFIX", "SCOPE", "DESCRIPTION", "HAS APP", "STATUS", "CREATED", "LAST USED", "REVOKED"}, rows)
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVar(&tenantID, "tenant", "", "Tenant ID (required)")
+	cmd.Flags().StringVar(&tenantID, "tenant", "", "Tenant ID (defaults to your configured default tenant when omitted)")
 	cmd.Flags().StringVar(&appID, "app-id", "", "Filter keys by application ID")
+	cmd.Flags().BoolVar(&hideRevoked, "hide-revoked", false, "Hide revoked keys from the output")
 
 	return cmd
 }
@@ -196,9 +221,12 @@ func newAdminKeyCreateCommand(env *Environment) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			tenantIDTrim := strings.TrimSpace(tenantID)
-			if tenantIDTrim == "" {
-				return errors.New("--tenant is required")
+			tenantIDTrim, err := resolveTenantID(envCtx, tenantID)
+			if err != nil {
+				return err
+			}
+			if !cmd.Flags().Changed("tenant") {
+				fmt.Fprintf(cmd.OutOrStdout(), "Using default tenant %s\n", tenantIDTrim)
 			}
 			client, err := adminClientFromEnv(envCtx)
 			if err != nil {
@@ -239,7 +267,7 @@ func newAdminKeyCreateCommand(env *Environment) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&tenantID, "tenant", "", "Tenant ID (required)")
+	cmd.Flags().StringVar(&tenantID, "tenant", "", "Tenant ID (defaults to your configured default tenant when omitted)")
 	cmd.Flags().StringVar(&appID, "app-id", "", "Application ID to scope the key")
 	cmd.Flags().StringVar(&description, "description", "", "Key description")
 	cmd.Flags().StringVar(&saveAlias, "save-key-as", "", "Alias to store the generated key in local config")
@@ -274,14 +302,32 @@ func newAdminKeyRevokeCommand(env *Environment) *cobra.Command {
 
 func formatTime(t time.Time) string {
 	if t.IsZero() {
-		return ""
+		return "-"
 	}
-	return t.UTC().Format(time.RFC3339)
+	return t.Local().Format("2006 Jan 02 03:04 PM")
+}
+
+func formatRelativeTime(t time.Time, zeroFallback string) string {
+	if t.IsZero() {
+		return zeroFallback
+	}
+	return humanize.Time(t)
+}
+
+func formatRelativeTimePtr(t *time.Time, zeroFallback string) string {
+	if t == nil {
+		return zeroFallback
+	}
+	return formatRelativeTime(*t, zeroFallback)
 }
 
 func optional(ptr *string) string {
 	if ptr == nil {
-		return ""
+		return "-"
 	}
-	return *ptr
+	trimmed := strings.TrimSpace(*ptr)
+	if trimmed == "" {
+		return "-"
+	}
+	return trimmed
 }
