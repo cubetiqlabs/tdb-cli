@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	configpkg "cubetiqlabs/tinydb/pkg/tdbcli/config"
+	versionpkg "cubetiqlabs/tinydb/pkg/tdbcli/version"
 )
 
 // NewRootCommand constructs the root Cobra command for the TinyDB CLI.
@@ -68,12 +69,16 @@ func NewRootCommand() *cobra.Command {
 		},
 	}
 
+	cmd.Version = versionpkg.Display()
+	cmd.SetVersionTemplate("{{printf \"%s\\n\" .Version}}")
+
 	cmd.PersistentFlags().StringVar(&configPath, "config", configPath, "Path to TinyDB CLI config file")
 	cmd.PersistentFlags().StringVar(&overrideEndpoint, "endpoint", "", "Override TinyDB endpoint for this invocation")
 	cmd.PersistentFlags().StringVar(&overrideAdminSecret, "admin-secret", "", "Override admin secret for this invocation")
 
 	cmd.CompletionOptions.DisableDefaultCmd = true
 
+	cmd.AddCommand(newVersionCommand())
 	registerConfigCommands(cmd, env)
 	registerAdminCommands(cmd, env)
 	registerTenantCommands(cmd, env)

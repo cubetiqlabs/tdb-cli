@@ -9,6 +9,7 @@ import (
 
 	clientpkg "cubetiqlabs/tinydb/pkg/tdbcli/client"
 	configpkg "cubetiqlabs/tinydb/pkg/tdbcli/config"
+	versionpkg "cubetiqlabs/tinydb/pkg/tdbcli/version"
 )
 
 func registerTenantCommands(root *cobra.Command, env *Environment) {
@@ -37,17 +38,29 @@ type authFlags struct {
 }
 
 func (a *authFlags) bind(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&a.tenantID, "tenant", "", "Tenant ID (required)")
+	cmd.Flags().StringVar(&a.tenantID, "tenant", "", "Tenant ID (defaults to configured value)")
 	cmd.Flags().StringVar(&a.keyAlias, "key", "", "Stored key alias to authenticate with")
 	cmd.Flags().StringVar(&a.apiKey, "api-key", "", "Raw API key to authenticate with (overrides stored keys)")
 }
 
-func (a *authFlags) resolveTenantClient(env *Environment, cmd *cobra.Command) (*clientpkg.TenantClient, configpkg.APIKeyEntry, error) {
+func (a *authFlags) resolveTenantClient(env *Environment, cmd *cobra.Command) (*clientpkg.TenantClient, configpkg.APIKeyEntry, string, error) {
 	tenantID := strings.TrimSpace(a.tenantID)
 	if tenantID == "" {
-		return nil, configpkg.APIKeyEntry{}, errors.New("--tenant is required")
+		envCtx, err := requireEnvironment(env)
+		if err != nil {
+			return nil, configpkg.APIKeyEntry{}, "", err
+		}
+		tenantID = strings.TrimSpace(envCtx.Config.DefaultTenant)
 	}
-	return tenantClientFromEnv(env, tenantID, strings.TrimSpace(a.keyAlias), strings.TrimSpace(a.apiKey))
+	if tenantID == "" {
+		return nil, configpkg.APIKeyEntry{}, "", errors.New("--tenant is required (set a default via `tdb config set default-tenant <tenant_id>`)")
+	}
+	client, entry, err := tenantClientFromEnv(env, tenantID, strings.TrimSpace(a.keyAlias), strings.TrimSpace(a.apiKey))
+	if err != nil {
+		return nil, configpkg.APIKeyEntry{}, "", err
+	}
+	a.tenantID = tenantID
+	return client, entry, tenantID, nil
 }
 
 func newTenantAppsListCommand(env *Environment) *cobra.Command {
@@ -60,7 +73,7 @@ func newTenantAppsListCommand(env *Environment) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			tenantClient, _, err := auth.resolveTenantClient(envCtx, cmd)
+			tenantClient, _, _, err := auth.resolveTenantClient(envCtx, cmd)
 			if err != nil {
 				return err
 			}
@@ -104,14 +117,17 @@ func newTenantAppsCreateCommand(env *Environment) *cobra.Command {
 			if strings.TrimSpace(name) == "" {
 				return errors.New("--name is required")
 			}
-			tenantID := strings.TrimSpace(auth.tenantID)
-			tenantClient, _, err := auth.resolveTenantClient(envCtx, cmd)
+			tenantClient, _, resolvedTenantID, err := auth.resolveTenantClient(envCtx, cmd)
 			if err != nil {
 				return err
 			}
+			desc := strings.TrimSpace(description)
+			if desc == "" {
+				desc = versionpkg.DefaultApplicationDescription()
+			}
 			req := clientpkg.CreateApplicationRequest{
 				Name:        strings.TrimSpace(name),
-				Description: strings.TrimSpace(description),
+				Description: desc,
 				WithAPIKey:  withKey,
 			}
 			app, generatedKey, err := tenantClient.CreateApplication(cmd.Context(), req)
@@ -126,7 +142,7 @@ func newTenantAppsCreateCommand(env *Environment) *cobra.Command {
 					if generatedKey.Description != nil {
 						entry.Description = *generatedKey.Description
 					}
-					if err := storeAPIKey(envCtx, tenantID, storeAlias, entry, setDefault, strings.TrimSpace(tenantLabel)); err != nil {
+					if err := storeAPIKey(envCtx, resolvedTenantID, storeAlias, entry, setDefault, strings.TrimSpace(tenantLabel)); err != nil {
 						return fmt.Errorf("application created but failed to store key: %w", err)
 					}
 					fmt.Fprintf(cmd.OutOrStdout(), "Stored generated key as %s\n", storeAlias)
@@ -135,9 +151,9 @@ func newTenantAppsCreateCommand(env *Environment) *cobra.Command {
 			tenantLabelTrim := strings.TrimSpace(tenantLabel)
 			if tenantLabelTrim != "" && strings.TrimSpace(storeAlias) == "" {
 				cfg := envCtx.Config
-				tc := cfg.EnsureTenant(tenantID)
+				tc := cfg.EnsureTenant(resolvedTenantID)
 				tc.Name = tenantLabelTrim
-				cfg.UpdateTenant(tenantID, tc)
+				cfg.UpdateTenant(resolvedTenantID, tc)
 				if err := envCtx.Save(); err != nil {
 					return err
 				}
@@ -148,7 +164,7 @@ func newTenantAppsCreateCommand(env *Environment) *cobra.Command {
 
 	auth.bind(cmd)
 	cmd.Flags().StringVar(&name, "name", "", "Application name")
-	cmd.Flags().StringVar(&description, "description", "", "Application description")
+	cmd.Flags().StringVar(&description, "description", "", "Application description (defaults to CLI identifier)")
 	cmd.Flags().BoolVar(&withKey, "with-key", false, "Generate an API key for the application")
 	cmd.Flags().StringVar(&storeAlias, "store-key-as", "", "Alias to store generated key in local config")
 	cmd.Flags().BoolVar(&setDefault, "set-default", false, "Mark stored key as default for the tenant")
@@ -168,7 +184,7 @@ func newTenantAppsGetCommand(env *Environment) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			tenantClient, _, err := auth.resolveTenantClient(envCtx, cmd)
+			tenantClient, _, _, err := auth.resolveTenantClient(envCtx, cmd)
 			if err != nil {
 				return err
 			}

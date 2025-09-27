@@ -109,6 +109,9 @@ func storeAPIKey(env *Environment, tenantID, alias string, entry configpkg.APIKe
 		tc.DefaultKey = alias
 	}
 	cfg.UpdateTenant(tenantID, tc)
+	if setDefault || strings.TrimSpace(cfg.DefaultTenant) == "" {
+		cfg.DefaultTenant = tenantID
+	}
 	return env.Save()
 }
 
@@ -139,6 +142,11 @@ func deleteAPIKey(env *Environment, tenantID, alias string) (bool, error) {
 	} else {
 		cfg.UpdateTenant(tenantID, tc)
 	}
+	if cfg.DefaultTenant == tenantID {
+		if _, ok := cfg.Tenants[tenantID]; !ok {
+			cfg.DefaultTenant = ""
+		}
+	}
 	if err := env.Save(); err != nil {
 		return false, err
 	}
@@ -165,5 +173,23 @@ func setDefaultKey(env *Environment, tenantID, alias string) error {
 	}
 	tc.DefaultKey = alias
 	cfg.UpdateTenant(tenantID, tc)
+	if strings.TrimSpace(cfg.DefaultTenant) == "" {
+		cfg.DefaultTenant = tenantID
+	}
+	return env.Save()
+}
+
+func setDefaultTenant(env *Environment, tenantID string) error {
+	cfgEnv, err := requireEnvironment(env)
+	if err != nil {
+		return err
+	}
+	tenantID = strings.TrimSpace(tenantID)
+	if tenantID == "" {
+		return errors.New("tenant id is required")
+	}
+	cfg := cfgEnv.Config
+	cfg.EnsureTenant(tenantID)
+	cfg.DefaultTenant = tenantID
 	return env.Save()
 }

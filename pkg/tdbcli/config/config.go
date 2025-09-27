@@ -13,9 +13,10 @@ import (
 
 // Config represents persisted CLI configuration for TinyDB.
 type Config struct {
-	Endpoint    string                  `yaml:"endpoint"`
-	AdminSecret string                  `yaml:"admin_secret"`
-	Tenants     map[string]TenantConfig `yaml:"tenants,omitempty"`
+	Endpoint      string                  `yaml:"endpoint"`
+	AdminSecret   string                  `yaml:"admin_secret"`
+	DefaultTenant string                  `yaml:"default_tenant,omitempty"`
+	Tenants       map[string]TenantConfig `yaml:"tenants,omitempty"`
 }
 
 // TenantConfig stores API credentials cached for a tenant.

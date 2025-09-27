@@ -131,7 +131,7 @@ func newConfigDeleteKeyCommand(env *Environment) *cobra.Command {
 func newConfigSetCommand(env *Environment) *cobra.Command {
 	return &cobra.Command{
 		Use:   "set <field> [values...]",
-		Short: "Update core CLI settings (endpoint, admin-secret, default-key, tenant-name)",
+		Short: "Update core CLI settings (endpoint, admin-secret, default-key, tenant-name, default-tenant)",
 		Args:  cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
@@ -174,6 +174,14 @@ func newConfigSetCommand(env *Environment) *cobra.Command {
 					return err
 				}
 				fmt.Fprintf(cmd.OutOrStdout(), "Set key %s as default for tenant %s\n", args[2], args[1])
+			case "default-tenant", "default_tenant":
+				if len(args) != 2 {
+					return errors.New("usage: tdb config set default-tenant <tenant_id>")
+				}
+				if err := setDefaultTenant(envCtx, args[1]); err != nil {
+					return err
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "Default tenant set to %s\n", args[1])
 			case "tenant-name", "tenant_name":
 				if len(args) < 3 {
 					return errors.New("usage: tdb config set tenant-name <tenant_id> <name>")
@@ -192,7 +200,7 @@ func newConfigSetCommand(env *Environment) *cobra.Command {
 				}
 				fmt.Fprintf(cmd.OutOrStdout(), "Tenant %s labeled as %s\n", tenantID, name)
 			default:
-				return fmt.Errorf("unknown config field %q; supported values: endpoint, admin-secret, default-key, tenant-name", field)
+				return fmt.Errorf("unknown config field %q; supported values: endpoint, admin-secret, default-key, tenant-name, default-tenant", field)
 			}
 			return nil
 		},

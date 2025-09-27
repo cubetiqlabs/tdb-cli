@@ -29,3 +29,18 @@ func UserAgent() string {
 func DefaultAPIKeyDescription() string {
 	return fmt.Sprintf("Generated via %s/%s", Name, value())
 }
+
+// DefaultApplicationDescription returns a fallback description used when creating applications.
+func DefaultApplicationDescription() string {
+	return fmt.Sprintf("Created via %s/%s", Name, value())
+}
+
+// Number returns the sanitized version string.
+func Number() string {
+	return value()
+}
+
+// Display returns the combined CLI name and version.
+func Display() string {
+	return fmt.Sprintf("%s/%s", Name, value())
+}
