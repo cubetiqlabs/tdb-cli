@@ -28,6 +28,50 @@ func registerTenantCommands(root *cobra.Command, env *Environment) {
 
 	tenantCmd.AddCommand(appsCmd)
 
+	collectionsCmd := &cobra.Command{
+		Use:   "collections",
+		Short: "Manage collections for a tenant",
+	}
+	collectionsCmd.AddCommand(newTenantCollectionsListCommand(env))
+	collectionsCmd.AddCommand(newTenantCollectionsGetCommand(env))
+	collectionsCmd.AddCommand(newTenantCollectionsCreateCommand(env))
+	collectionsCmd.AddCommand(newTenantCollectionsUpdateCommand(env))
+	collectionsCmd.AddCommand(newTenantCollectionsDeleteCommand(env))
+	collectionsCmd.AddCommand(newTenantCollectionsCountCommand(env))
+	tenantCmd.AddCommand(collectionsCmd)
+
+	documentsCmd := &cobra.Command{
+		Use:   "documents",
+		Short: "Manage collection documents",
+	}
+	documentsCmd.AddCommand(newTenantDocumentsListCommand(env))
+	documentsCmd.AddCommand(newTenantDocumentsGetCommand(env))
+	documentsCmd.AddCommand(newTenantDocumentsCreateCommand(env))
+	documentsCmd.AddCommand(newTenantDocumentsUpdateCommand(env))
+	documentsCmd.AddCommand(newTenantDocumentsPatchCommand(env))
+	documentsCmd.AddCommand(newTenantDocumentsDeleteCommand(env))
+	documentsCmd.AddCommand(newTenantDocumentsBulkCreateCommand(env))
+	documentsCmd.AddCommand(newTenantDocumentsCountCommand(env))
+	documentsCmd.AddCommand(newTenantDocumentsExportCommand(env))
+	tenantCmd.AddCommand(documentsCmd)
+
+	queriesCmd := &cobra.Command{
+		Use:   "queries",
+		Short: "Manage saved queries",
+	}
+	queriesCmd.AddCommand(newTenantQueriesListCommand(env))
+	queriesCmd.AddCommand(newTenantQueriesGetCommand(env))
+	queriesCmd.AddCommand(newTenantQueriesCreateCommand(env))
+	queriesCmd.AddCommand(newTenantQueriesPutCommand(env))
+	queriesCmd.AddCommand(newTenantQueriesPatchCommand(env))
+	queriesCmd.AddCommand(newTenantQueriesExecuteCommand(env))
+	queriesCmd.AddCommand(newTenantQueriesDeleteCommand(env))
+	queriesCmd.AddCommand(newTenantQueriesParamsTemplateCommand(env))
+	tenantCmd.AddCommand(queriesCmd)
+
+	authCmd := newTenantAuthCommand(env)
+	tenantCmd.AddCommand(authCmd)
+
 	root.AddCommand(tenantCmd)
 }
 
@@ -35,12 +79,18 @@ type authFlags struct {
 	tenantID string
 	keyAlias string
 	apiKey   string
+	appID    string
 }
 
 func (a *authFlags) bind(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&a.tenantID, "tenant", "", "Tenant ID (defaults to configured value)")
 	cmd.Flags().StringVar(&a.keyAlias, "key", "", "Stored key alias to authenticate with")
 	cmd.Flags().StringVar(&a.apiKey, "api-key", "", "Raw API key to authenticate with (overrides stored keys)")
+}
+
+func (a *authFlags) bindWithApp(cmd *cobra.Command) {
+	a.bind(cmd)
+	cmd.Flags().StringVar(&a.appID, "app-id", "", "Application ID to scope requests (defaults to stored key scope when available)")
 }
 
 func (a *authFlags) resolveTenantClient(env *Environment, cmd *cobra.Command) (*clientpkg.TenantClient, configpkg.APIKeyEntry, string, error) {
@@ -58,6 +108,16 @@ func (a *authFlags) resolveTenantClient(env *Environment, cmd *cobra.Command) (*
 	client, entry, err := tenantClientFromEnv(env, tenantID, strings.TrimSpace(a.keyAlias), strings.TrimSpace(a.apiKey))
 	if err != nil {
 		return nil, configpkg.APIKeyEntry{}, "", err
+	}
+	if strings.TrimSpace(a.appID) == "" {
+		if trimmed := strings.TrimSpace(entry.AppID); trimmed != "" {
+			a.appID = trimmed
+			if cmd != nil {
+				if flag := cmd.Flags().Lookup("app-id"); flag != nil && !flag.Changed {
+					fmt.Fprintf(cmd.OutOrStdout(), "Using stored app scope %s\n", trimmed)
+				}
+			}
+		}
 	}
 	a.tenantID = tenantID
 	return client, entry, tenantID, nil
