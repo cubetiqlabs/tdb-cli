@@ -212,6 +212,49 @@ Fetch details for a single application:
 tdb tenant apps get app_456 --tenant tenant_123 --key checkout
 ```
 
+Manage collections:
+
+```bash
+# list collections (optionally scoped by app)
+tdb tenant collections list --tenant tenant_123 --key checkout
+
+# create from schema file and set a primary key
+tdb tenant collections create \
+  --tenant tenant_123 \
+  --key checkout \
+  --name inventory \
+  --schema-file ./inventory.schema.json \
+  --primary-key-field sku \
+  --primary-key-type string
+
+# update schema
+tdb tenant collections update inventory --tenant tenant_123 --key checkout --schema '{"type":"object"}'
+
+# delete
+tdb tenant collections delete inventory --tenant tenant_123 --key checkout
+```
+
+Work with documents:
+
+```bash
+# list documents with filters and projections
+tdb tenant documents list inventory \
+  --tenant tenant_123 --key checkout \
+  --filter status=active --select id,name,price
+
+# insert from a JSON file
+tdb tenant documents create inventory --tenant tenant_123 --key checkout --file ./doc.json
+
+# patch a document from stdin
+tdb tenant documents patch inventory doc_001 --tenant tenant_123 --key checkout --stdin <<<'{"price": 42.5}'
+
+# bulk insert from array
+tdb tenant documents bulk-create inventory --tenant tenant_123 --key checkout --file ./bulk.json
+
+# purge a document permanently
+tdb tenant documents delete inventory doc_001 --tenant tenant_123 --key checkout --purge --confirm
+```
+
 ## Output and color
 
 The CLI renders unicode tables with alternating row styles when stdout is a TTY. Set `NO_COLOR=1` to disable ANSI colors, or `FORCE_COLOR=1` to force-enable them in pipelines.

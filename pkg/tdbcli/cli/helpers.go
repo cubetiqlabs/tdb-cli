@@ -1,9 +1,15 @@
 package cli
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/spf13/cobra"
 
 	clientpkg "cubetiqlabs/tinydb/pkg/tdbcli/client"
 	configpkg "cubetiqlabs/tinydb/pkg/tdbcli/config"
@@ -207,4 +213,100 @@ func setDefaultTenant(env *Environment, tenantID string) error {
 	cfg.EnsureTenant(tenantID)
 	cfg.DefaultTenant = tenantID
 	return env.Save()
+}
+
+func printJSON(cmd *cobra.Command, value interface{}) error {
+	enc := json.NewEncoder(cmd.OutOrStdout())
+	enc.SetIndent("", "  ")
+	return enc.Encode(value)
+}
+
+func readFileContent(path string) (string, error) {
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" {
+		return "", nil
+	}
+	raw, err := os.ReadFile(filepath.Clean(trimmed))
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
+}
+
+func readJSONPayload(cmd *cobra.Command, inline, filePath string, useStdin, expectArray bool) ([]byte, error) {
+	sources := 0
+	if strings.TrimSpace(inline) != "" {
+		sources++
+	}
+	if strings.TrimSpace(filePath) != "" {
+		sources++
+	}
+	if useStdin {
+		sources++
+	}
+	if sources == 0 {
+		return nil, errors.New("provide --data, --file, or --stdin")
+	}
+	if sources > 1 {
+		return nil, errors.New("use only one of --data, --file, or --stdin")
+	}
+
+	var payload []byte
+	switch {
+	case strings.TrimSpace(inline) != "":
+		payload = []byte(inline)
+	case strings.TrimSpace(filePath) != "":
+		content, err := os.ReadFile(filepath.Clean(filePath))
+		if err != nil {
+			return nil, err
+		}
+		payload = content
+	case useStdin:
+		data, err := io.ReadAll(cmd.InOrStdin())
+		if err != nil {
+			return nil, err
+		}
+		payload = data
+	}
+
+	trimmed := strings.TrimSpace(string(payload))
+	if trimmed == "" {
+		return nil, errors.New("payload cannot be empty")
+	}
+	if expectArray && !strings.HasPrefix(trimmed, "[") {
+		return nil, errors.New("expected JSON array payload")
+	}
+	if !json.Valid([]byte(trimmed)) {
+		return nil, errors.New("invalid JSON payload")
+	}
+	return []byte(trimmed), nil
+}
+
+func summarizePrimaryKey(field, typ string, auto bool) string {
+	if strings.TrimSpace(field) == "" {
+		return "-"
+	}
+	summary := field
+	if strings.TrimSpace(typ) != "" {
+		summary += fmt.Sprintf(" (%s)", typ)
+	}
+	if auto {
+		summary += " auto"
+	}
+	return summary
+}
+
+func summarizeJSON(raw string, max int) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "-"
+	}
+	if max <= 0 || len([]rune(trimmed)) <= max {
+		return trimmed
+	}
+	runes := []rune(trimmed)
+	if max <= 3 {
+		return string(runes[:max])
+	}
+	return string(runes[:max-3]) + "..."
 }

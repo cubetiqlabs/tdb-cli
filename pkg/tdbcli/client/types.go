@@ -27,6 +27,85 @@ type APIKey struct {
 	LastUsedAt  *time.Time `json:"last_used_at"`
 }
 
+// Collection mirrors the collection resource.
+type Collection struct {
+	ID              string     `json:"id"`
+	TenantID        string     `json:"tenant_id"`
+	AppID           *string    `json:"app_id"`
+	Name            string     `json:"name"`
+	SchemaJSON      string     `json:"schema_json"`
+	PrimaryKeyField string     `json:"primary_key_field"`
+	PrimaryKeyType  string     `json:"primary_key_type"`
+	PrimaryKeyAuto  bool       `json:"primary_key_auto"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+	DeletedAt       *time.Time `json:"deleted_at"`
+}
+
+// PrimaryKeySpec configures a collection primary key.
+type PrimaryKeySpec struct {
+	Field string `json:"field"`
+	Type  string `json:"type"`
+	Auto  *bool  `json:"auto,omitempty"`
+}
+
+// CreateCollectionRequest is the payload for provisioning a collection.
+type CreateCollectionRequest struct {
+	Name       string          `json:"name"`
+	Schema     string          `json:"schema"`
+	AppID      string          `json:"app_id,omitempty"`
+	PrimaryKey *PrimaryKeySpec `json:"primary_key,omitempty"`
+	Sync       *bool           `json:"sync,omitempty"`
+}
+
+// UpdateCollectionRequest updates schema/primary key for a collection.
+type UpdateCollectionRequest struct {
+	Schema     string          `json:"schema,omitempty"`
+	PrimaryKey *PrimaryKeySpec `json:"primary_key,omitempty"`
+}
+
+// Document represents a stored document record.
+type Document struct {
+	ID           string     `json:"id"`
+	TenantID     string     `json:"tenant_id"`
+	CollectionID string     `json:"collection_id"`
+	Key          string     `json:"key"`
+	KeyNumeric   *int64     `json:"key_numeric"`
+	Data         string     `json:"data"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+	DeletedAt    *time.Time `json:"deleted_at"`
+}
+
+// DocumentPagination exposes pagination metadata for list endpoints.
+type DocumentPagination struct {
+	Limit  int   `json:"limit"`
+	Offset int   `json:"offset"`
+	Count  int64 `json:"count"`
+}
+
+// DocumentListResponse is returned by list endpoints.
+type DocumentListResponse struct {
+	Items      []Document         `json:"items"`
+	Pagination DocumentPagination `json:"pagination"`
+}
+
+// DocumentBulkResponse is returned by bulk create endpoints.
+type DocumentBulkResponse struct {
+	Items []Document `json:"items"`
+}
+
+// ListDocumentsParams configures document list queries.
+type ListDocumentsParams struct {
+	AppID          string
+	Limit          int
+	Offset         int
+	Cursor         string
+	IncludeDeleted bool
+	SelectFields   []string
+	Filters        map[string]string
+}
+
 // Application represents the application resource exposed via tenant API.
 type Application struct {
 	ID          string     `json:"id"`
