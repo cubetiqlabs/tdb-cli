@@ -25,8 +25,9 @@ import (
 )
 
 const (
-	upgradeRepoOwner = "cubetiqlabs"
-	upgradeRepoName  = "tdb-cli"
+	upgradeRepoOwner  = "cubetiqlabs"
+	upgradeRepoName   = "tdb-cli"
+	defaultBinaryPerm = os.FileMode(0o755)
 )
 
 type githubRelease struct {
@@ -277,10 +278,10 @@ func extractBinary(archivePath, assetName, tmpDir string) (string, error) {
 	}
 	// assume raw binary
 	binaryPath := filepath.Join(tmpDir, binaryName())
-	if err := copyFile(archivePath, binaryPath); err != nil {
+	if err := copyFile(archivePath, binaryPath, defaultBinaryPerm); err != nil {
 		return "", err
 	}
-	return binaryPath, os.Chmod(binaryPath, 0o755)
+	return binaryPath, os.Chmod(binaryPath, defaultBinaryPerm)
 }
 
 func extractFromTarGz(path, tmpDir string) (string, error) {
@@ -369,7 +370,17 @@ func installBinary(newBinary, exePath string, cmd *cobra.Command) error {
 }
 
 func installOnUnix(newBinary, exePath string) error {
-	if err := os.Chmod(newBinary, 0o755); err != nil {
+	targetMode := defaultBinaryPerm
+	if info, err := os.Stat(exePath); err == nil {
+		perms := info.Mode().Perm()
+		perms |= 0o100
+		// Drop group/world write to avoid escalating privileges.
+		perms &^= 0o022
+		targetMode = perms
+	} else if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("stat current binary: %w", err)
+	}
+	if err := os.Chmod(newBinary, targetMode); err != nil {
 		return err
 	}
 	backup := exePath + ".bak"
@@ -388,13 +399,9 @@ func installOnUnix(newBinary, exePath string) error {
 		}
 		var linkErr *os.LinkError
 		if errors.As(err, &linkErr) && errors.Is(linkErr.Err, syscall.EXDEV) {
-			if copyErr := copyFile(newBinary, exePath); copyErr != nil {
+			if copyErr := copyFile(newBinary, exePath, targetMode); copyErr != nil {
 				_ = os.Rename(backup, exePath)
 				return fmt.Errorf("install new binary (copy fallback): %w", copyErr)
-			}
-			if chmodErr := os.Chmod(exePath, 0o755); chmodErr != nil {
-				_ = os.Rename(backup, exePath)
-				return fmt.Errorf("set permissions on new binary: %w", chmodErr)
 			}
 			_ = os.Remove(backup)
 			return nil
@@ -404,6 +411,7 @@ func installOnUnix(newBinary, exePath string) error {
 	}
 	// cleanup backup
 	_ = os.Remove(backup)
+	_ = os.Chmod(exePath, targetMode)
 	return nil
 }
 
@@ -412,7 +420,7 @@ func installOnWindows(newBinary, exePath string, cmd *cobra.Command) error {
 		return err
 	}
 	pending := exePath + ".new"
-	if err := copyFile(newBinary, pending); err != nil {
+	if err := copyFile(newBinary, pending, defaultBinaryPerm); err != nil {
 		// check if the error is because of permission denied
 		if os.IsPermission(err) {
 			return fmt.Errorf("permission denied when preparing new binary. Please run the upgrade command with sufficient permissions (e.g. Run as Administrator)")
@@ -436,17 +444,21 @@ Move-Item -Force -Path $source -Destination $target
 	return nil
 }
 
-func copyFile(src, dst string) error {
+func copyFile(src, dst string, perm os.FileMode) error {
 	srcFile, err := os.Open(src)
 	if err != nil {
 		return err
 	}
 	defer srcFile.Close()
-	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o755)
+	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, perm)
 	if err != nil {
 		return err
 	}
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		dstFile.Close()
+		return err
+	}
+	if err := dstFile.Chmod(perm); err != nil {
 		dstFile.Close()
 		return err
 	}
