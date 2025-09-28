@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	configpkg "cubetiqlabs/tinydb/pkg/tdbcli/config"
-	versionpkg "cubetiqlabs/tinydb/pkg/tdbcli/version"
+	configpkg "github.com/cubetiqlabs/tdb-cli/pkg/tdbcli/config"
+	versionpkg "github.com/cubetiqlabs/tdb-cli/pkg/tdbcli/version"
 )
 
 // NewRootCommand constructs the root Cobra command for the TinyDB CLI.

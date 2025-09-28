@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	configpkg "cubetiqlabs/tinydb/pkg/tdbcli/config"
+	configpkg "github.com/cubetiqlabs/tdb-cli/pkg/tdbcli/config"
 )
 
 // Environment tracks shared state for CLI commands.

@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	clientpkg "cubetiqlabs/tinydb/pkg/tdbcli/client"
-	configpkg "cubetiqlabs/tinydb/pkg/tdbcli/config"
-	versionpkg "cubetiqlabs/tinydb/pkg/tdbcli/version"
+	clientpkg "github.com/cubetiqlabs/tdb-cli/pkg/tdbcli/client"
+	configpkg "github.com/cubetiqlabs/tdb-cli/pkg/tdbcli/config"
+	versionpkg "github.com/cubetiqlabs/tdb-cli/pkg/tdbcli/version"
 )
 
 func registerTenantCommands(root *cobra.Command, env *Environment) {

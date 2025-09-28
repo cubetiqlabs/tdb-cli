@@ -22,7 +22,7 @@ func value() string {
 
 // UserAgent returns the default User-Agent header for CLI HTTP requests.
 func UserAgent() string {
-	return fmt.Sprintf("%s/%s (+https://github.com/cubetiqlabs/tinydb/pkg/tdbcli)", Name, value())
+	return fmt.Sprintf("%s/%s (+https://github.com/github.com/cubetiqlabs/tdb-cli/pkg/tdbcli)", Name, value())
 }
 
 // DefaultAPIKeyDescription returns a fallback description used when creating API keys.

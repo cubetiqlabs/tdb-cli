@@ -11,8 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	clientpkg "cubetiqlabs/tinydb/pkg/tdbcli/client"
-	configpkg "cubetiqlabs/tinydb/pkg/tdbcli/config"
+	clientpkg "github.com/cubetiqlabs/tdb-cli/pkg/tdbcli/client"
+	configpkg "github.com/cubetiqlabs/tdb-cli/pkg/tdbcli/config"
 )
 
 func requireEnvironment(cmdEnv *Environment) (*Environment, error) {

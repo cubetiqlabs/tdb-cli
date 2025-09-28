@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	versionpkg "cubetiqlabs/tinydb/pkg/tdbcli/version"
+	versionpkg "github.com/cubetiqlabs/tdb-cli/pkg/tdbcli/version"
 )
 
 type httpDoer interface {

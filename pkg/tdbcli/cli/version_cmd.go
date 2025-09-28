@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	versionpkg "cubetiqlabs/tinydb/pkg/tdbcli/version"
+	versionpkg "github.com/cubetiqlabs/tdb-cli/pkg/tdbcli/version"
 )
 
 func newVersionCommand() *cobra.Command {

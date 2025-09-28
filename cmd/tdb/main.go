@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"cubetiqlabs/tinydb/pkg/tdbcli/cli"
+	"github.com/cubetiqlabs/tdb-cli/pkg/tdbcli/cli"
 )
 
 func main() {

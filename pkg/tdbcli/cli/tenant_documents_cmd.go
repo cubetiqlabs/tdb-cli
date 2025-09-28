@@ -12,7 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	clientpkg "cubetiqlabs/tinydb/pkg/tdbcli/client"
+	clientpkg "github.com/cubetiqlabs/tdb-cli/pkg/tdbcli/client"
 )
 
 func newTenantDocumentsListCommand(env *Environment) *cobra.Command {

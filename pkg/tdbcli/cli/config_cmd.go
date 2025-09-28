@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	configpkg "cubetiqlabs/tinydb/pkg/tdbcli/config"
+	configpkg "github.com/cubetiqlabs/tdb-cli/pkg/tdbcli/config"
 )
 
 func registerConfigCommands(root *cobra.Command, env *Environment) {
