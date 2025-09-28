@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -357,6 +358,7 @@ func newTenantCollectionsSyncCommand(env *Environment) *cobra.Command {
 				return errors.New("no collections provided in payload")
 			}
 			var created, updated, unchanged, skipped, failed int
+			recordTotals := recordSyncStats{}
 			appID := strings.TrimSpace(auth.appID)
 			for _, entry := range entries {
 				name := strings.TrimSpace(entry.Name)
@@ -371,6 +373,19 @@ func newTenantCollectionsSyncCommand(env *Environment) *cobra.Command {
 					skipped++
 					continue
 				}
+				records, err := entry.recordsList()
+				if err != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "Skipping %s: invalid records payload: %v\n", name, err)
+					failed++
+					continue
+				}
+				recordMode, err := entry.recordSyncMode()
+				if err != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "Skipping %s: %v\n", name, err)
+					failed++
+					continue
+				}
+				hasRecords := len(records) > 0
 				pkSpec := (*clientpkg.PrimaryKeySpec)(nil)
 				if entry.PrimaryKey != nil {
 					pkSpec = &clientpkg.PrimaryKeySpec{Field: strings.TrimSpace(entry.PrimaryKey.Field), Type: strings.TrimSpace(entry.PrimaryKey.Type)}
@@ -399,13 +414,22 @@ func newTenantCollectionsSyncCommand(env *Environment) *cobra.Command {
 						skipped++
 						continue
 					}
-					if _, err := tenantClient.CreateCollection(cmd.Context(), createReq); err != nil {
+					createdCol, err := tenantClient.CreateCollection(cmd.Context(), createReq)
+					if err != nil {
 						fmt.Fprintf(cmd.ErrOrStderr(), "Failed to create %s: %v\n", name, err)
 						failed++
 						continue
 					}
 					fmt.Fprintf(cmd.OutOrStdout(), "Synced collection %s (created)\n", name)
 					created++
+					if hasRecords {
+						stats, syncErr := syncCollectionRecords(cmd.Context(), cmd, tenantClient, createdCol, appID, records, recordMode)
+						recordTotals.add(stats)
+						if syncErr != nil {
+							failed++
+							continue
+						}
+					}
 					continue
 				}
 
@@ -428,17 +452,37 @@ func newTenantCollectionsSyncCommand(env *Environment) *cobra.Command {
 				if updateReq.Schema == "" && updateReq.PrimaryKey == nil {
 					fmt.Fprintf(cmd.OutOrStdout(), "Synced collection %s (unchanged)\n", name)
 					unchanged++
+					if hasRecords {
+						stats, syncErr := syncCollectionRecords(cmd.Context(), cmd, tenantClient, col, appID, records, recordMode)
+						recordTotals.add(stats)
+						if syncErr != nil {
+							failed++
+							continue
+						}
+					}
 					continue
 				}
-				if _, err := tenantClient.UpdateCollection(cmd.Context(), name, auth.appID, updateReq); err != nil {
+				updatedCol, err := tenantClient.UpdateCollection(cmd.Context(), name, auth.appID, updateReq)
+				if err != nil {
 					fmt.Fprintf(cmd.ErrOrStderr(), "Failed to update %s: %v\n", name, err)
 					failed++
 					continue
 				}
 				fmt.Fprintf(cmd.OutOrStdout(), "Synced collection %s (updated)\n", name)
 				updated++
+				if hasRecords {
+					stats, syncErr := syncCollectionRecords(cmd.Context(), cmd, tenantClient, updatedCol, appID, records, recordMode)
+					recordTotals.add(stats)
+					if syncErr != nil {
+						failed++
+						continue
+					}
+				}
 			}
 			fmt.Fprintf(cmd.ErrOrStderr(), "Collections synced: created %d, updated %d, unchanged %d, skipped %d, failed %d\n", created, updated, unchanged, skipped, failed)
+			if recordTotals.total() > 0 {
+				fmt.Fprintf(cmd.ErrOrStderr(), "RECORDS_TOTAL created=%d updated=%d unchanged=%d skipped=%d failed=%d\n", recordTotals.created, recordTotals.updated, recordTotals.unchanged, recordTotals.skipped, recordTotals.failed)
+			}
 			if failed > 0 {
 				return fmt.Errorf("failed to sync %d collection(s)", failed)
 			}
@@ -454,9 +498,11 @@ func newTenantCollectionsSyncCommand(env *Environment) *cobra.Command {
 }
 
 type collectionSyncPayload struct {
-	Name       string                `json:"name"`
-	Schema     json.RawMessage       `json:"schema"`
-	PrimaryKey *collectionPrimaryKey `json:"primary_key"`
+	Name        string                `json:"name"`
+	Schema      json.RawMessage       `json:"schema"`
+	PrimaryKey  *collectionPrimaryKey `json:"primary_key"`
+	Records     json.RawMessage       `json:"records"`
+	RecordsMode string                `json:"records_mode"`
 }
 
 type collectionPrimaryKey struct {
@@ -481,6 +527,37 @@ func (p *collectionSyncPayload) schemaString() (string, error) {
 		return strings.TrimSpace(s), nil
 	}
 	return string(trimmed), nil
+}
+
+func (p *collectionSyncPayload) recordsList() ([]map[string]any, error) {
+	if p == nil || len(p.Records) == 0 {
+		return nil, nil
+	}
+	trimmed := bytes.TrimSpace(p.Records)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return nil, nil
+	}
+	docs, err := decodeDocumentSyncPayload(trimmed)
+	if err != nil {
+		return nil, fmt.Errorf("decode records: %w", err)
+	}
+	return docs, nil
+}
+
+func (p *collectionSyncPayload) recordSyncMode() (string, error) {
+	if p == nil {
+		return "patch", nil
+	}
+	mode := strings.ToLower(strings.TrimSpace(p.RecordsMode))
+	if mode == "" {
+		return "patch", nil
+	}
+	switch mode {
+	case "patch", "update":
+		return mode, nil
+	default:
+		return "", fmt.Errorf("unsupported records_mode %q (expected patch or update)", p.RecordsMode)
+	}
 }
 
 func decodeCollectionSyncPayload(raw []byte) ([]collectionSyncPayload, error) {
@@ -583,4 +660,133 @@ func primaryKeyNeedsUpdate(spec *clientpkg.PrimaryKeySpec, col *clientpkg.Collec
 		return true
 	}
 	return false
+}
+
+type recordSyncStats struct {
+	created   int
+	updated   int
+	unchanged int
+	skipped   int
+	failed    int
+}
+
+func (s *recordSyncStats) add(other recordSyncStats) {
+	s.created += other.created
+	s.updated += other.updated
+	s.unchanged += other.unchanged
+	s.skipped += other.skipped
+	s.failed += other.failed
+}
+
+func (s recordSyncStats) total() int {
+	return s.created + s.updated + s.unchanged + s.skipped + s.failed
+}
+
+func syncCollectionRecords(ctx context.Context, cmd *cobra.Command, tenantClient *clientpkg.TenantClient, collection *clientpkg.Collection, appID string, records []map[string]any, mode string) (recordSyncStats, error) {
+	stats := recordSyncStats{}
+	if len(records) == 0 {
+		return stats, nil
+	}
+	if tenantClient == nil {
+		return stats, errors.New("tenant client is required for record sync")
+	}
+	if collection == nil {
+		return stats, errors.New("collection metadata is required for record sync")
+	}
+	collectionName := strings.TrimSpace(collection.Name)
+	if collectionName == "" {
+		return stats, errors.New("collection name is required for record sync")
+	}
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	if mode == "" {
+		mode = "patch"
+	}
+	if mode != "patch" && mode != "update" {
+		return stats, fmt.Errorf("unsupported record sync mode %q", mode)
+	}
+	keepPrimary := mode == "update"
+	pkField := strings.TrimSpace(collection.PrimaryKeyField)
+	if pkField == "" {
+		pkField = "id"
+	}
+	pkType := strings.TrimSpace(collection.PrimaryKeyType)
+	if pkType == "" {
+		pkType = "string"
+	}
+	for idx, rawDoc := range records {
+		keyValue, err := extractDocumentKey(rawDoc, pkField, pkType)
+		if err != nil || strings.TrimSpace(keyValue) == "" {
+			fmt.Fprintf(cmd.ErrOrStderr(), "[%s][%d] skipping record: %v\n", collectionName, idx, firstNonNil(err, errors.New("missing primary key value")))
+			stats.skipped++
+			continue
+		}
+		existing, err := tenantClient.GetDocumentByPrimaryKey(ctx, collectionName, keyValue, appID)
+		if err != nil {
+			if isNotFoundError(err) {
+				createPayload := prepareDocumentCreatePayload(rawDoc, pkField)
+				encoded, encErr := json.Marshal(createPayload)
+				if encErr != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "[%s][%d] encode %s failed: %v\n", collectionName, idx, keyValue, encErr)
+					stats.failed++
+					continue
+				}
+				result, createErr := tenantClient.CreateDocument(ctx, collectionName, encoded, appID)
+				if createErr != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "[%s][%d] create %s failed: %v\n", collectionName, idx, keyValue, createErr)
+					stats.failed++
+					continue
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "[%s] Synced record %s (created %s)\n", collectionName, keyValue, formatRelativeTime(result.CreatedAt, "just now"))
+				stats.created++
+				continue
+			}
+			fmt.Fprintf(cmd.ErrOrStderr(), "[%s][%d] lookup %s failed: %v\n", collectionName, idx, keyValue, err)
+			stats.failed++
+			continue
+		}
+		payloadMap := prepareDocumentSyncPayload(rawDoc, pkField, keepPrimary)
+		if len(payloadMap) == 0 {
+			fmt.Fprintf(cmd.ErrOrStderr(), "[%s][%d] record %s has no mutable fields; skipping\n", collectionName, idx, keyValue)
+			stats.skipped++
+			continue
+		}
+		skipUpdate, cmpErr := shouldSkipDocumentSync(existing.Data, payloadMap, pkField, keepPrimary, mode)
+		if cmpErr != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "[%s][%d] compare %s failed: %v\n", collectionName, idx, keyValue, cmpErr)
+			stats.failed++
+			continue
+		}
+		if skipUpdate {
+			fmt.Fprintf(cmd.OutOrStdout(), "[%s] Synced record %s (unchanged)\n", collectionName, keyValue)
+			stats.unchanged++
+			continue
+		}
+		encoded, encErr := json.Marshal(payloadMap)
+		if encErr != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "[%s][%d] encode %s failed: %v\n", collectionName, idx, keyValue, encErr)
+			stats.failed++
+			continue
+		}
+		var (
+			result  *clientpkg.Document
+			syncErr error
+		)
+		if mode == "update" {
+			result, syncErr = tenantClient.UpdateDocument(ctx, collectionName, existing.ID, encoded, appID)
+		} else {
+			result, syncErr = tenantClient.PatchDocument(ctx, collectionName, existing.ID, encoded, appID)
+		}
+		if syncErr != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "[%s][%d] update %s failed: %v\n", collectionName, idx, keyValue, syncErr)
+			stats.failed++
+			continue
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "[%s] Synced record %s (updated %s)\n", collectionName, keyValue, formatRelativeTime(result.UpdatedAt, "just now"))
+		stats.updated++
+	}
+	fmt.Fprintf(cmd.ErrOrStderr(), "[%s] Records synced: created %d, updated %d, unchanged %d, skipped %d, failed %d\n", collectionName, stats.created, stats.updated, stats.unchanged, stats.skipped, stats.failed)
+	if stats.failed > 0 {
+		return stats, fmt.Errorf("failed to sync %d record(s)", stats.failed)
+	}
+	return stats, nil
 }

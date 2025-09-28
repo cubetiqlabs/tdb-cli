@@ -2,11 +2,88 @@
         {
             "name": "users",
             "schema": { "type": "object" },
-            "primary_key": { "field": "id", "type": "string" }
+            "primary_key": { "field": "id", "type": "string" },
+            "records": [
+                {
+                    "id": "user_1",
+                    "name": "Alice"
+                },
+                {
+                    "id": "user_2",
+                    "name": "Bob"
+                },
+                {
+                    "id": "user-3",
+                    "name": "Charlie"
+                }
+            ]
         },
         {
             "name": "customers",
             "schema": { "type": "object" },
-            "primary_key": { "field": "id", "type": "string" }
+            "primary_key": { "field": "id", "type": "string" },
+            "records": [
+                {
+                    "id": "customer_1",
+                    "name": "Acme Corp",
+                    "address": {
+                        "street": "123 Main St",
+                        "city": "Metropolis",
+                        "zip": "12345"
+                    }
+                },
+                {
+                    "id": "customer_2",
+                    "name": "Globex Inc",
+                    "address": {
+                        "street": "456 Elm St",
+                        "city": "Gotham",
+                        "zip": "67890"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "inventory",
+            "schema": {
+                "type": "object",
+                "fields": {
+                    "sku": {
+                        "type": "string",
+                        "description": "Stock Keeping Unit, unique identifier for the product",
+                        "pattern": "^[A-Z0-9]{8}$"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "Name of the product",
+                        "minLength": 1,
+                        "maxLength": 100
+                    },
+                    "qty": {
+                        "type": "integer",
+                        "description": "Quantity of the product in stock",
+                        "minimum": 0
+                    }
+                },
+                "required": ["sku", "name", "qty"]
+            },
+            "primary_key": { "field": "sku", "type": "string" },
+            "records": [
+                {
+                    "sku": "ABC12345",
+                    "name": "Widget",
+                    "qty": 100
+                },
+                {
+                    "sku": "DEF67890",
+                    "name": "Gadget",
+                    "qty": 50
+                },
+                {
+                    "sku": "GHI13579",
+                    "name": "Doohickey",
+                    "qty": 75
+                }
+            ]
         }
     ]
