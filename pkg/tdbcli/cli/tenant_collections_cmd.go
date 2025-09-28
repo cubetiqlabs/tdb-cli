@@ -333,6 +333,7 @@ func newTenantCollectionsSyncCommand(env *Environment) *cobra.Command {
 	var data string
 	var file string
 	var stdin bool
+	var mode string
 
 	cmd := &cobra.Command{
 		Use:   "sync",
@@ -357,6 +358,13 @@ func newTenantCollectionsSyncCommand(env *Environment) *cobra.Command {
 			if len(entries) == 0 {
 				return errors.New("no collections provided in payload")
 			}
+			baseMode := strings.ToLower(strings.TrimSpace(mode))
+			if baseMode == "" {
+				baseMode = "patch"
+			}
+			if baseMode != "patch" && baseMode != "update" {
+				return fmt.Errorf("unsupported mode %q (choose patch or update)", mode)
+			}
 			var created, updated, unchanged, skipped, failed int
 			recordTotals := recordSyncStats{}
 			appID := strings.TrimSpace(auth.appID)
@@ -379,7 +387,7 @@ func newTenantCollectionsSyncCommand(env *Environment) *cobra.Command {
 					failed++
 					continue
 				}
-				recordMode, err := entry.recordSyncMode()
+				recordMode, err := entry.recordSyncMode(baseMode)
 				if err != nil {
 					fmt.Fprintf(cmd.ErrOrStderr(), "Skipping %s: %v\n", name, err)
 					failed++
@@ -494,6 +502,7 @@ func newTenantCollectionsSyncCommand(env *Environment) *cobra.Command {
 	cmd.Flags().StringVar(&data, "data", "", "Inline JSON payload containing collection definitions")
 	cmd.Flags().StringVar(&file, "file", "", "Path to JSON file containing collection definitions")
 	cmd.Flags().BoolVar(&stdin, "stdin", false, "Read collection definitions from stdin")
+	cmd.Flags().StringVar(&mode, "mode", "patch", "Record sync mode: patch (default) or update")
 	return cmd
 }
 
@@ -544,13 +553,20 @@ func (p *collectionSyncPayload) recordsList() ([]map[string]any, error) {
 	return docs, nil
 }
 
-func (p *collectionSyncPayload) recordSyncMode() (string, error) {
+func (p *collectionSyncPayload) recordSyncMode(defaultMode string) (string, error) {
+	base := strings.ToLower(strings.TrimSpace(defaultMode))
+	if base == "" {
+		base = "patch"
+	}
+	if base != "patch" && base != "update" {
+		return "", fmt.Errorf("unsupported default records mode %q", defaultMode)
+	}
 	if p == nil {
-		return "patch", nil
+		return base, nil
 	}
 	mode := strings.ToLower(strings.TrimSpace(p.RecordsMode))
 	if mode == "" {
-		return "patch", nil
+		return base, nil
 	}
 	switch mode {
 	case "patch", "update":
