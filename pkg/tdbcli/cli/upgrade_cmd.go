@@ -149,19 +149,23 @@ func selectAsset(release *githubRelease) (*struct {
 	osID := runtime.GOOS
 	archID := runtime.GOARCH
 
+	var exts []string
+	switch osID {
+	case "windows":
+		exts = []string{"zip"}
+	case "darwin":
+		exts = []string{"zip", "tar.gz"}
+	default:
+		exts = []string{"tar.gz", "zip"}
+	}
+
 	var candidates []string
 	cleanTag := sanitizeVersion(release.TagName)
-	if osID == "windows" {
+	for _, ext := range exts {
 		candidates = append(candidates,
-			fmt.Sprintf("tdb_%s_%s.zip", osID, archID),
-			fmt.Sprintf("tdb_%s_%s_%s.zip", cleanTag, osID, archID),
-			fmt.Sprintf("tdb-%s-%s.zip", osID, archID),
-		)
-	} else {
-		candidates = append(candidates,
-			fmt.Sprintf("tdb_%s_%s.tar.gz", osID, archID),
-			fmt.Sprintf("tdb_%s_%s_%s.tar.gz", cleanTag, osID, archID),
-			fmt.Sprintf("tdb-%s-%s.tar.gz", osID, archID),
+			fmt.Sprintf("tdb_%s_%s.%s", osID, archID, ext),
+			fmt.Sprintf("tdb_%s_%s_%s.%s", cleanTag, osID, archID, ext),
+			fmt.Sprintf("tdb-%s-%s.%s", osID, archID, ext),
 		)
 	}
 	for _, asset := range release.Assets {
