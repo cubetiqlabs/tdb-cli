@@ -1,5 +1,8 @@
 # TinyDB CLI (`tdb`)
 
+[![Latest Release](https://img.shields.io/github/v/release/cubetiqlabs/tdb-cli?sort=semver)](https://github.com/cubetiqlabs/tdb-cli/releases)
+[![Release workflow status](https://github.com/cubetiqlabs/tdb-cli/actions/workflows/release.yml/badge.svg)](https://github.com/cubetiqlabs/tdb-cli/actions/workflows/release.yml)
+
 The `tdb` command-line tool lets you administer TinyDB from your terminal. It wraps the admin and tenant APIs so you can provision tenants, issue API keys, manage applications, and keep local credentials synced.
 
 ## Features
@@ -14,7 +17,7 @@ The `tdb` command-line tool lets you administer TinyDB from your terminal. It wr
 
 ### 1. Download a release binary
 
-Prebuilt archives are published for every tagged release under [`tdb-cli-v*` GitHub releases](https://github.com/cubetiqlabs/tinydb/releases).
+Prebuilt archives are published for every tagged release under [`tdb-cli` GitHub releases](https://github.com/cubetiqlabs/tdb-cli/releases). When a tag matching `v*` is pushed, GitHub Actions builds six platform archives and publishes them automatically—see [`.github/workflows/release.yml`](https://github.com/cubetiqlabs/tdb-cli/blob/main/.github/workflows/release.yml).
 
 1. Download the archive matching your platform (for example `tdb-cli_0.3.0_darwin_arm64.zip`).
 2. Extract the archive and place the `tdb` (or `tdb.exe`) binary somewhere on your `PATH` (e.g. `/usr/local/bin`).
@@ -35,19 +38,19 @@ Prebuilt archives are published for every tagged release under [`tdb-cli-v*` Git
 Prerequisites: Go 1.22+.
 
 ```bash
-git clone https://github.com/cubetiqlabs/tinydb.git
-cd tinydb
+git clone https://github.com/cubetiqlabs/tdb-cli.git
+cd tdb-cli
 go build -trimpath -ldflags "-s -w" -o tdb ./cmd/tdb
 mv tdb /usr/local/bin/
 ```
 
-Optionally embed the current Git version by reusing the project Makefile:
+Optionally embed build metadata via the repo Makefile:
 
 ```bash
-make tdb-cli
+make build
 ```
 
-Artifacts will be written to `dist/tdb-cli/<os>_<arch>/` alongside `.zip`/`.tar.gz` archives.
+Artifacts will be written to `dist/<target>/` alongside `.zip`/`.tar.gz` archives.
 
 ### 3. Upgrade or reinstall
 
@@ -175,6 +178,7 @@ tdb admin keys create \
 
 tdb admin keys revoke key_prefix
 ```
+
 The `tdb admin keys list` table now includes **HAS APP**, **STATUS**, **CREATED**, **LAST USED**, and **REVOKED** columns with friendly timestamps. Pass `--hide-revoked` to omit revoked keys from the output when you only care about active credentials.
 
 ### Tenant commands
@@ -312,13 +316,13 @@ Use `tdb upgrade --check` to only report availability without downloading.
 Quick install (macOS/Linux):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/cubetiqlabs/tinydb/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/cubetiqlabs/tdb-cli/main/scripts/install.sh | bash
 ```
 
 Quick install (Windows PowerShell):
 
 ```powershell
-irm https://raw.githubusercontent.com/cubetiqlabs/tinydb/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/cubetiqlabs/tdb-cli/main/scripts/install.ps1 | iex
 ```
 
 ## Output and color
@@ -348,14 +352,14 @@ tdb completion bash | source /dev/stdin
 
 To enable completion for all sessions:
 
-- **Linux:**
-  ```bash
-  tdb completion bash > /etc/bash_completion.d/tdb
-  ```
-- **macOS (Homebrew):**
-  ```bash
-  tdb completion bash > /usr/local/etc/bash_completion.d/tdb
-  ```
+-   **Linux:**
+    ```bash
+    tdb completion bash > /etc/bash_completion.d/tdb
+    ```
+-   **macOS (Homebrew):**
+    ```bash
+    tdb completion bash > /usr/local/etc/bash_completion.d/tdb
+    ```
 
 ### Zsh
 

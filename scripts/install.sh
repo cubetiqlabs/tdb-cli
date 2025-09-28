@@ -1,8 +1,17 @@
 #!/usr/bin/env bash
-set -e
-REPO="cubetiqlabs/tinydb"
+set -euo pipefail
+
+REPO="cubetiqlabs/tdb-cli"
 NAME="tdb"
-LATEST=$(curl -fsSL https://api.github.com/repos/$REPO/releases/latest | grep 'tag_name' | head -n 1 | cut -d '"' -f4)
+
+API_URL="https://api.github.com/repos/$REPO/releases/latest"
+TAG=$(curl -fsSL "$API_URL" | grep -m1 '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+if [[ -z "$TAG" ]]; then
+  echo "Failed to determine latest release tag from $API_URL" >&2
+  exit 1
+fi
+VERSION="${TAG#v}"
+
 OS=$(uname | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
 if [[ "$ARCH" == "x86_64" ]]; then ARCH="amd64"; fi
@@ -21,8 +30,9 @@ case "$OS" in
     ;;
 esac
 ASSET="${NAME}_${OS}_${ARCH}.${EXT}"
-URL="https://github.com/$REPO/releases/download/v$LATEST/$ASSET"
+URL="https://github.com/$REPO/releases/download/$TAG/$ASSET"
 TMP=$(mktemp -d)
+ORIG_DIR=$(pwd)
 cd "$TMP"
 echo "Downloading $URL..."
 curl -sSL -o "$ASSET" "$URL"
@@ -41,4 +51,7 @@ chmod +x "$BIN"
 DEST="${TDB_INSTALL_DIR:-/usr/local/bin}/$NAME"
 sudo mkdir -p "$(dirname "$DEST")"
 sudo mv "$BIN" "$DEST"
-echo "Installed $NAME to $DEST"
+echo "Installed $NAME $VERSION to $DEST"
+
+cd "$ORIG_DIR"
+rm -rf "$TMP"

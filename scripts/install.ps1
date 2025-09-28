@@ -1,7 +1,7 @@
 param(
     [string]$Version = "latest"
 )
-$repo = "cubetiqlabs/tinydb"
+$repo = "cubetiqlabs/tdb-cli"
 $name = "tdb"
 function Get-LatestTag {
     $uri = "https://api.github.com/repos/$repo/releases/latest"
