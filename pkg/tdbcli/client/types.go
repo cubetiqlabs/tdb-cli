@@ -127,6 +127,7 @@ type AuthStatus struct {
 	AppID      string     `json:"app_id"`
 	AppName    string     `json:"app_name"`
 	Status     string     `json:"status"`
+	KeyPrefix  string     `json:"key_prefix,omitempty"`
 	CreatedAt  *time.Time `json:"created_at,omitempty"`
 	LastUsed   *time.Time `json:"last_used,omitempty"`
 	Scope      string     `json:"scope,omitempty"`
