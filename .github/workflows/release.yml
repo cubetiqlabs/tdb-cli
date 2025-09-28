@@ -39,10 +39,13 @@ jobs:
       - name: Determine release version
         id: meta
         shell: bash
+        env:
+          INPUT_TAG: ${{ github.ref_name || inputs.tag }}
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-            TAG="${{ inputs.tag }}"
+            TAG="${INPUT_TAG}"
             if [[ -z "${TAG}" ]]; then
               echo "::error ::Input 'tag' must be provided when dispatching manually" >&2
               exit 1
@@ -56,7 +59,7 @@ jobs:
             exit 1
           fi
 
-          VERSION_OVERRIDE="${{ inputs.version }}"
+          VERSION_OVERRIDE="${INPUT_VERSION}"
           if [[ -n "${VERSION_OVERRIDE}" ]]; then
             VERSION="${VERSION_OVERRIDE}"
           else
