@@ -23,7 +23,7 @@ import (
 
 const (
 	upgradeRepoOwner = "cubetiqlabs"
-	upgradeRepoName  = "tinydb"
+	upgradeRepoName  = "tdb-cli"
 )
 
 type githubRelease struct {
