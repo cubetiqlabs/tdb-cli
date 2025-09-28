@@ -149,48 +149,14 @@ func newAdminKeyListCommand(env *Environment) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			var filter *string
-			if strings.TrimSpace(appID) != "" {
-				v := strings.TrimSpace(appID)
-				filter = &v
-			}
+			filter := normalizeOptionalString(appID)
 			keys, err := client.ListKeys(cmd.Context(), tenantIDTrim, filter)
 			if err != nil {
 				return err
 			}
-			if len(keys) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No keys found")
-				return nil
-			}
-			rows := make([][]string, 0, len(keys))
-			for _, k := range keys {
-				if hideRevoked && k.RevokedAt != nil {
-					continue
-				}
-				scope := k.Scope
-				if scope == "application" && k.AppID != nil {
-					scope = scope + " (" + *k.AppID + ")"
-				}
-				hasApp := "❌"
-				if k.AppID != nil && strings.TrimSpace(*k.AppID) != "" {
-					hasApp = "✅"
-				}
-				status := "Active"
-				revoked := "-"
-				if k.RevokedAt != nil {
-					status = "Revoked"
-					revoked = formatRelativeTimePtr(k.RevokedAt, "-")
-				}
-				created := formatTime(k.CreatedAt)
-				age := formatRelativeTime(k.CreatedAt, "-")
-				if age != "-" {
-					created = fmt.Sprintf("%s (%s)", created, age)
-				}
-				lastUsed := formatRelativeTimePtr(k.LastUsedAt, "never")
-				rows = append(rows, []string{k.Prefix, scope, optional(k.Description), hasApp, status, created, lastUsed, revoked})
-			}
+			rows, message := buildKeyRows(keys, hideRevoked)
 			if len(rows) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No keys found (all revoked keys hidden)")
+				fmt.Fprintln(cmd.OutOrStdout(), message)
 				return nil
 			}
 			renderTable(cmd, []string{"PREFIX", "SCOPE", "DESCRIPTION", "HAS APP", "STATUS", "CREATED", "LAST USED", "REVOKED"}, rows)
@@ -232,36 +198,17 @@ func newAdminKeyCreateCommand(env *Environment) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			req := clientpkg.CreateAPIKeyRequest{}
-			if strings.TrimSpace(appID) != "" {
-				v := strings.TrimSpace(appID)
-				req.AppID = &v
-			}
-			desc := strings.TrimSpace(description)
-			if desc == "" {
-				desc = versionpkg.DefaultAPIKeyDescription()
-			}
-			descCopy := desc
-			req.Description = &descCopy
+			req, desc := buildCreateKeyRequest(appID, description)
 			generated, err := client.GenerateKey(cmd.Context(), tenantIDTrim, req)
 			if err != nil {
 				return err
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Generated key: %s (prefix %s)\n", generated.APIKey, generated.Prefix)
-			if strings.TrimSpace(saveAlias) != "" {
-				entry := configpkg.APIKeyEntry{Key: generated.APIKey, Prefix: generated.Prefix, Description: desc}
-				if generated.Description != nil {
-					if trimmed := strings.TrimSpace(*generated.Description); trimmed != "" {
-						entry.Description = trimmed
-					}
+			if alias := strings.TrimSpace(saveAlias); alias != "" {
+				if err := persistGeneratedKey(envCtx, tenantIDTrim, alias, generated, desc, setDefault, tenantLabel); err != nil {
+					return err
 				}
-				if generated.AppID != nil {
-					entry.AppID = *generated.AppID
-				}
-				if err := storeAPIKey(envCtx, tenantIDTrim, saveAlias, entry, setDefault, strings.TrimSpace(tenantLabel)); err != nil {
-					return fmt.Errorf("key generated but failed to store: %w", err)
-				}
-				fmt.Fprintf(cmd.OutOrStdout(), "Stored generated key as %s\n", saveAlias)
+				fmt.Fprintf(cmd.OutOrStdout(), "Stored generated key as %s\n", alias)
 			}
 			return nil
 		},
@@ -305,6 +252,105 @@ func formatTime(t time.Time) string {
 		return "-"
 	}
 	return t.Local().Format("2006 Jan 02 03:04 PM")
+}
+
+func normalizeOptionalString(value string) *string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
+}
+
+func buildKeyRows(keys []clientpkg.APIKey, hideRevoked bool) ([][]string, string) {
+	if len(keys) == 0 {
+		return nil, "No keys found"
+	}
+	rows := make([][]string, 0, len(keys))
+	for _, key := range keys {
+		if hideRevoked && key.RevokedAt != nil {
+			continue
+		}
+		rows = append(rows, formatKeyRow(key))
+	}
+	if len(rows) == 0 {
+		return nil, "No keys found (all revoked keys hidden)"
+	}
+	return rows, ""
+}
+
+func formatKeyRow(k clientpkg.APIKey) []string {
+	scope := keyScope(k)
+	status, revoked := keyStatusAndRevoked(k)
+	created := formatCreatedWithAge(k.CreatedAt)
+	lastUsed := formatRelativeTimePtr(k.LastUsedAt, "never")
+	return []string{k.Prefix, scope, optional(k.Description), hasAppIndicator(k), status, created, lastUsed, revoked}
+}
+
+func keyScope(k clientpkg.APIKey) string {
+	if k.Scope != "application" || k.AppID == nil {
+		return k.Scope
+	}
+	app := strings.TrimSpace(*k.AppID)
+	if app == "" {
+		return k.Scope
+	}
+	return fmt.Sprintf("%s (%s)", k.Scope, app)
+}
+
+func hasAppIndicator(k clientpkg.APIKey) string {
+	if k.AppID == nil {
+		return "❌"
+	}
+	if strings.TrimSpace(*k.AppID) == "" {
+		return "❌"
+	}
+	return "✅"
+}
+
+func keyStatusAndRevoked(k clientpkg.APIKey) (string, string) {
+	if k.RevokedAt == nil {
+		return "Active", "-"
+	}
+	return "Revoked", formatRelativeTimePtr(k.RevokedAt, "-")
+}
+
+func formatCreatedWithAge(t time.Time) string {
+	created := formatTime(t)
+	age := formatRelativeTime(t, "-")
+	if age == "-" {
+		return created
+	}
+	return fmt.Sprintf("%s (%s)", created, age)
+}
+
+func buildCreateKeyRequest(appID, description string) (clientpkg.CreateAPIKeyRequest, string) {
+	req := clientpkg.CreateAPIKeyRequest{}
+	if trimmed := strings.TrimSpace(appID); trimmed != "" {
+		req.AppID = &trimmed
+	}
+	desc := strings.TrimSpace(description)
+	if desc == "" {
+		desc = versionpkg.DefaultAPIKeyDescription()
+	}
+	req.Description = &desc
+	return req, desc
+}
+
+func persistGeneratedKey(envCtx *Environment, tenantID, alias string, generated *clientpkg.GeneratedKey, fallbackDesc string, setDefault bool, tenantLabel string) error {
+	entry := configpkg.APIKeyEntry{Key: generated.APIKey, Prefix: generated.Prefix, Description: fallbackDesc}
+	if generated.Description != nil {
+		if trimmed := strings.TrimSpace(*generated.Description); trimmed != "" {
+			entry.Description = trimmed
+		}
+	}
+	if generated.AppID != nil {
+		entry.AppID = *generated.AppID
+	}
+	if err := storeAPIKey(envCtx, tenantID, alias, entry, setDefault, strings.TrimSpace(tenantLabel)); err != nil {
+		return fmt.Errorf("key generated but failed to store: %w", err)
+	}
+	return nil
 }
 
 func formatRelativeTime(t time.Time, zeroFallback string) string {
