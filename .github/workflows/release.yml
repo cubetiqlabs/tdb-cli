@@ -127,10 +127,12 @@ jobs:
         run: |
           set -euo pipefail
           BINARY_NAME="tdb${BINARY_SUFFIX}"
+          COMMIT_HASH="$(git rev-parse HEAD)"
+          BUILD_TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
           mkdir -p build
           CGO_ENABLED=0 GOOS="${GOOS}" GOARCH="${GOARCH}" \
-            go build -trimpath -ldflags "-s -w -X github.com/cubetiqlabs/tdb-cli/pkg/tdbcli/version.Version=${VERSION}" \
+            go build -trimpath -ldflags "-s -w -X github.com/cubetiqlabs/tdb-cli/pkg/tdbcli/version.Version=${VERSION} -X github.com/cubetiqlabs/tdb-cli/pkg/tdbcli/version.Commit=${COMMIT_HASH} -X github.com/cubetiqlabs/tdb-cli/pkg/tdbcli/version.BuildTime=${BUILD_TIMESTAMP}" \
             -o "build/${BINARY_NAME}" ./cmd/tdb
 
           ARCHIVE_NAME="tdb_${GOOS}_${GOARCH}"

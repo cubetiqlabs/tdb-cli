@@ -428,6 +428,11 @@ func installOnWindows(newBinary, exePath string, cmd *cobra.Command) error {
 		return fmt.Errorf("prepare replacement: %w", err)
 	}
 	pid := os.Getpid()
+	psPath, err := resolvePowershellPath()
+	if err != nil {
+		_ = os.Remove(pending)
+		return fmt.Errorf("locate powershell: %w", err)
+	}
 	script := fmt.Sprintf(`$ErrorActionPreference = 'Stop'
 $target = '%s'
 $source = '%s'
@@ -435,13 +440,68 @@ $pid = %d
 while (Get-Process -Id $pid -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 200 }
 Move-Item -Force -Path $source -Destination $target
 `, powershellEscape(exePath), powershellEscape(pending), pid)
-	cmdPS := exec.Command("powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", script)
+	cmdPS := exec.Command(psPath, "-NoProfile", "-WindowStyle", "Hidden", "-Command", script)
 	// No SysProcAttr for cross-platform compatibility
 	if err := cmdPS.Start(); err != nil {
+		_ = os.Remove(pending)
 		return fmt.Errorf("launch replacement helper: %w", err)
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Update scheduled. The CLI will close to complete the upgrade.\n")
 	return nil
+}
+
+func resolvePowershellPath() (string, error) {
+	if runtime.GOOS != "windows" {
+		return "", errors.New("powershell resolution is only supported on Windows hosts")
+	}
+	candidates := windowsPowershellCandidates()
+	checked := make(map[string]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		clean := filepath.Clean(candidate)
+		if clean == "" || !filepath.IsAbs(clean) {
+			continue
+		}
+		if _, seen := checked[clean]; seen {
+			continue
+		}
+		checked[clean] = struct{}{}
+		info, err := os.Stat(clean)
+		if err != nil {
+			continue
+		}
+		if info.IsDir() {
+			continue
+		}
+		return clean, nil
+	}
+	return "", fmt.Errorf("powershell executable not found in trusted locations")
+}
+
+func windowsPowershellCandidates() []string {
+	var roots []string
+	if systemRoot, ok := os.LookupEnv("SystemRoot"); ok {
+		if trimmed := strings.TrimSpace(systemRoot); trimmed != "" {
+			roots = append(roots, trimmed)
+		}
+	}
+	if winDir, ok := os.LookupEnv("windir"); ok {
+		if trimmed := strings.TrimSpace(winDir); trimmed != "" {
+			roots = append(roots, trimmed)
+		}
+	}
+	roots = append(roots, `C:\Windows`)
+	var candidates []string
+	for _, root := range roots {
+		cleanRoot := filepath.Clean(root)
+		if cleanRoot == "" || !filepath.IsAbs(cleanRoot) {
+			continue
+		}
+		candidates = append(candidates,
+			filepath.Join(cleanRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
+			filepath.Join(cleanRoot, "SysWOW64", "WindowsPowerShell", "v1.0", "powershell.exe"),
+		)
+	}
+	return candidates
 }
 
 func copyFile(src, dst string, perm os.FileMode) error {
