@@ -78,14 +78,12 @@ func NewRootCommand() *cobra.Command {
 
 	cmd.CompletionOptions.DisableDefaultCmd = true
 
-
-
-		cmd.AddCommand(newVersionCommand())
-		registerConfigCommands(cmd, env)
-		registerAdminCommands(cmd, env)
-		registerTenantCommands(cmd, env)
-		cmd.AddCommand(newCompletionCommand(cmd))
-		cmd.AddCommand(newUpgradeCommand())
+	cmd.AddCommand(newVersionCommand())
+	registerConfigCommands(cmd, env)
+	registerAdminCommands(cmd, env)
+	registerTenantCommands(cmd, env)
+	cmd.AddCommand(newCompletionCommand(cmd))
+	cmd.AddCommand(newUpgradeCommand())
 
 	return cmd
 }
