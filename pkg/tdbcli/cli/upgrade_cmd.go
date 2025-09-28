@@ -40,7 +40,72 @@ type githubRelease struct {
 	} `json:"assets"`
 }
 
+var enableColor = shouldUseColor()
+
+var (
+	colorInfo    = ansiWrap("36") // cyan
+	colorSuccess = ansiWrap("32") // green
+	colorWarn    = ansiWrap("33") // yellow
+	colorError   = ansiWrap("31") // red
+	colorBold    = ansiWrap("1")  // bold
+)
+
 var upgradeNoticeOnce sync.Once
+
+func ansiWrap(code string) func(string) string {
+	return func(text string) string {
+		if text == "" || !enableColor {
+			return text
+		}
+		return fmt.Sprintf("\x1b[%sm%s\x1b[0m", code, text)
+	}
+}
+
+func shouldUseColor() bool {
+	if _, disabled := os.LookupEnv("NO_COLOR"); disabled {
+		return false
+	}
+	return true
+}
+
+func style(text string, wrappers ...func(string) string) string {
+	for _, wrap := range wrappers {
+		if wrap != nil {
+			text = wrap(text)
+		}
+	}
+	return text
+}
+
+func logWith(out io.Writer, icon string, iconWrap func(string) string, message string, msgWraps ...func(string) string) {
+	if out == nil {
+		return
+	}
+	if iconWrap != nil {
+		icon = iconWrap(icon)
+	}
+	fmt.Fprintf(out, "%s %s\n", icon, style(message, msgWraps...))
+}
+
+func logStep(out io.Writer, message string) {
+	logWith(out, "➜", colorInfo, message, colorBold)
+}
+
+func logInfo(out io.Writer, message string) {
+	logWith(out, "ℹ", colorInfo, message)
+}
+
+func logSuccess(out io.Writer, message string) {
+	logWith(out, "✔", colorSuccess, message, colorSuccess)
+}
+
+func logWarn(out io.Writer, message string) {
+	logWith(out, "!", colorWarn, message, colorWarn)
+}
+
+func logError(out io.Writer, message string) {
+	logWith(out, "✖", colorError, message, colorError)
+}
 
 func newUpgradeCommand() *cobra.Command {
 	var checkOnly bool
@@ -64,8 +129,10 @@ func newUpgradeCommand() *cobra.Command {
 func runUpgrade(ctx context.Context, cmd *cobra.Command, checkOnly bool) error {
 	current := versionpkg.Number()
 	if current == "dev" {
-		fmt.Fprintln(cmd.ErrOrStderr(), "You are running a development build. Upgrade via source control or a release build.")
+		logWarn(cmd.ErrOrStderr(), "You are running a development build. Upgrade via source control or a release build.")
 	}
+	statusOut := cmd.ErrOrStderr()
+	stdout := cmd.OutOrStdout()
 
 	release, err := fetchLatestRelease(ctx)
 	if err != nil {
@@ -78,13 +145,13 @@ func runUpgrade(ctx context.Context, cmd *cobra.Command, checkOnly bool) error {
 	}
 
 	if cmp >= 0 {
-		fmt.Fprintf(cmd.OutOrStdout(), "You are running the latest tdb CLI (%s).\n", versionpkg.Display())
+		logSuccess(stdout, fmt.Sprintf("You are running the latest tdb CLI (%s).", versionpkg.Display()))
 		return nil
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "New version available: %s (current %s)\n", latest, current)
+	logStep(stdout, fmt.Sprintf("New version available: %s (current %s)", latest, current))
 	if checkOnly {
-		fmt.Fprintln(cmd.OutOrStdout(), "Run without --check to download and install the update.")
+		logInfo(stdout, "Run without --check to download and install the update.")
 		return nil
 	}
 
@@ -92,6 +159,7 @@ func runUpgrade(ctx context.Context, cmd *cobra.Command, checkOnly bool) error {
 	if err != nil {
 		return err
 	}
+	logStep(statusOut, fmt.Sprintf("Downloading %s", asset.Name))
 
 	tmpDir, err := os.MkdirTemp("", "tdb-upgrade-")
 	if err != nil {
@@ -99,25 +167,29 @@ func runUpgrade(ctx context.Context, cmd *cobra.Command, checkOnly bool) error {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	archivePath, err := downloadAsset(ctx, asset.BrowserDownloadURL, filepath.Join(tmpDir, asset.Name))
+	archivePath, err := downloadAsset(ctx, statusOut, asset.BrowserDownloadURL, filepath.Join(tmpDir, asset.Name))
 	if err != nil {
 		return fmt.Errorf("download asset: %w", err)
 	}
+	logSuccess(statusOut, "Download complete")
+	logStep(statusOut, "Extracting archive")
 
 	newBinary, err := extractBinary(archivePath, asset.Name, tmpDir)
 	if err != nil {
 		return fmt.Errorf("extract binary: %w", err)
 	}
+	logSuccess(statusOut, "Archive extracted")
 
 	exePath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("determine executable path: %w", err)
 	}
+	logStep(statusOut, "Installing update")
 	if err := installBinary(newBinary, exePath, cmd); err != nil {
 		return err
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "Successfully updated tdb to %s.\n", latest)
+	logSuccess(stdout, fmt.Sprintf("Successfully updated tdb to %s.", latest))
 	return nil
 }
 
@@ -142,7 +214,7 @@ func scheduleUpgradeNotice(cmd *cobra.Command) {
 			if err != nil || latest == "" {
 				return
 			}
-			fmt.Fprintf(out, "Update available: tdb CLI %s (current %s). Run \"tdb upgrade\" to install.\n", latest, current)
+			logInfo(out, fmt.Sprintf("Update available: tdb CLI %s (current %s). Run \"tdb upgrade\" to install.", latest, current))
 		}(ctx, writer)
 	})
 }
@@ -244,7 +316,7 @@ func selectAsset(release *githubRelease) (*struct {
 	return nil, fmt.Errorf("no compatible asset found for %s/%s", runtime.GOOS, runtime.GOARCH)
 }
 
-func downloadAsset(ctx context.Context, url, dest string) (string, error) {
+func downloadAsset(ctx context.Context, out io.Writer, url, dest string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", err
@@ -263,10 +335,90 @@ func downloadAsset(ctx context.Context, url, dest string) (string, error) {
 		return "", err
 	}
 	defer f.Close()
-	if _, err := io.Copy(f, resp.Body); err != nil {
+	progressWriter := newProgressWriter(f, resp.ContentLength, out, style("[download]", colorInfo, colorBold))
+	defer progressWriter.finish()
+	if _, err := io.Copy(progressWriter, resp.Body); err != nil {
 		return "", err
 	}
 	return dest, nil
+}
+
+type progressWriter struct {
+	dest       io.Writer
+	total      int64
+	written    int64
+	lastUpdate time.Time
+	out        io.Writer
+	barWidth   int
+	label      string
+	lastLen    int
+	finished   bool
+}
+
+func newProgressWriter(dest io.Writer, total int64, out io.Writer, label string) *progressWriter {
+	pw := &progressWriter{dest: dest, total: total, out: out, barWidth: 30, label: label}
+	pw.render()
+	return pw
+}
+
+func (w *progressWriter) Write(p []byte) (int, error) {
+	n, err := w.dest.Write(p)
+	w.written += int64(n)
+	if time.Since(w.lastUpdate) >= 100*time.Millisecond || w.written == w.total {
+		w.render()
+	}
+	return n, err
+}
+
+func (w *progressWriter) render() {
+	if w.out == nil {
+		w.lastUpdate = time.Now()
+		return
+	}
+	var line string
+	if w.total > 0 {
+		percentage := (float64(w.written) / float64(w.total)) * 100
+		filled := int(float64(w.barWidth) * (float64(w.written) / float64(w.total)))
+		if filled > w.barWidth {
+			filled = w.barWidth
+		}
+		bar := strings.Repeat("#", filled) + strings.Repeat("-", w.barWidth-filled)
+		line = fmt.Sprintf("%s [%s] %6.2f%% (%s/%s)", w.label, bar, percentage, humanBytes(w.written), humanBytes(w.total))
+	} else {
+		line = fmt.Sprintf("%s %s downloaded", w.label, humanBytes(w.written))
+	}
+	if len(line) < w.lastLen {
+		line += strings.Repeat(" ", w.lastLen-len(line))
+	}
+	fmt.Fprintf(w.out, "\r%s", line)
+	w.lastLen = len(line)
+	w.lastUpdate = time.Now()
+}
+
+func (w *progressWriter) finish() {
+	if w.out == nil || w.finished {
+		return
+	}
+	w.render()
+	fmt.Fprint(w.out, "\n")
+	w.finished = true
+}
+
+func humanBytes(n int64) string {
+	if n < 0 {
+		return "unknown"
+	}
+	units := []string{"B", "KB", "MB", "GB", "TB", "PB"}
+	value := float64(n)
+	idx := 0
+	for value >= 1024 && idx < len(units)-1 {
+		value /= 1024
+		idx++
+	}
+	if idx == 0 {
+		return fmt.Sprintf("%d %s", n, units[idx])
+	}
+	return fmt.Sprintf("%.1f %s", value, units[idx])
 }
 
 func extractBinary(archivePath, assetName, tmpDir string) (string, error) {
@@ -446,7 +598,7 @@ Move-Item -Force -Path $source -Destination $target
 		_ = os.Remove(pending)
 		return fmt.Errorf("launch replacement helper: %w", err)
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Update scheduled. The CLI will close to complete the upgrade.\n")
+	logInfo(cmd.OutOrStdout(), "Update scheduled. The CLI will close to complete the upgrade.")
 	return nil
 }
 
