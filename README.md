@@ -105,4 +105,4 @@ Override the remote or branch by setting `REMOTE` / `BRANCH`. After the tag is p
 
 ## License
 
-MIT © CUBETIQ Labs
+MIT © CUBIS Labs
