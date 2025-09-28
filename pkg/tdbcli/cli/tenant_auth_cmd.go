@@ -65,7 +65,7 @@ func newTenantAuthCommand(env *Environment) *cobra.Command {
 			if status.CreatedAt != nil {
 				fmt.Fprintf(out, "Created At: %s\n", humanize.Time(*status.CreatedAt))
 			}
-			
+
 			if status.LastUsed != nil {
 				fmt.Fprintf(out, "Last Used: %s\n", humanize.Time(*status.LastUsed))
 			}

@@ -26,9 +26,9 @@ Zsh:
   # To load completions for each session, add to your ~/.zshrc:
   $ tdb completion zsh > "${fpath[1]}/_tdb"
 `,
-		Args: cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
+		Args:      cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
 		ValidArgs: []string{"bash", "zsh"},
-		Hidden: false,
+		Hidden:    false,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 1 {
 				return cmd.Help()
