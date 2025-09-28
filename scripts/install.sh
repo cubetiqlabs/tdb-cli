@@ -30,7 +30,7 @@ case "$OS" in
 esac
 
 ASSET=$(echo "$RELEASE_JSON" | \
-  grep -oE "\"name\":\"${NAME}_${OS}_${ARCH}\\.(tar\\.gz|zip)\"" | head -n1 | cut -d'"' -f4)
+  grep -oE "\"name\": *\"${NAME}_${OS}_${ARCH}\\.(tar\\.gz|zip)\"" | head -n1 | cut -d'"' -f4)
 if [[ -z "$ASSET" ]]; then
   echo "No release asset found for ${OS}/${ARCH}" >&2
   exit 1
