@@ -274,6 +274,29 @@ func (c *TenantClient) GetDocument(ctx context.Context, collection, id, appID st
 	return &doc, nil
 }
 
+// GetDocumentByPrimaryKey fetches a document using its primary key value.
+func (c *TenantClient) GetDocumentByPrimaryKey(ctx context.Context, collection, key, appID string) (*Document, error) {
+	values := url.Values{}
+	if trimmed := strings.TrimSpace(appID); trimmed != "" {
+		values.Set("app_id", trimmed)
+	}
+	path := fmt.Sprintf("/api/collections/%s/documents/primary/%s", url.PathEscape(collection), url.PathEscape(key))
+	if encoded := values.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	req, err := c.newJSONRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.authorize(req)
+	c.applyAppScope(req, appID)
+	var doc Document
+	if err := c.do(req, &doc); err != nil {
+		return nil, err
+	}
+	return &doc, nil
+}
+
 // CreateDocument inserts a new document into a collection.
 func (c *TenantClient) CreateDocument(ctx context.Context, collection string, payload []byte, appID string) (*Document, error) {
 	req, err := c.newJSONRequest(ctx, http.MethodPost, fmt.Sprintf("/api/collections/%s/documents", url.PathEscape(collection)), jsonRaw(payload))

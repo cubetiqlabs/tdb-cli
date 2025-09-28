@@ -7,13 +7,13 @@ TinyDB CLI is a standalone command-line interface for managing TinyDB tenants, c
 
 ## Features
 
-- Tenant and API key management
-- Collection & schema lifecycle commands
-- Document CRUD and bulk operations
-- Saved query lifecycle and execution helpers
-- Real-time authentication check via `/api/me`
-- Offline export helpers and install scripts
-- Self-upgrade via `tdb upgrade`
+-   Tenant and API key management
+-   Collection & schema lifecycle commands
+-   Document CRUD and bulk operations
+-   Saved query lifecycle and execution helpers
+-   Real-time authentication check via `/api/me`
+-   Offline export helpers and install scripts
+-   Self-upgrade via `tdb upgrade`
 
 ## Installation
 
@@ -52,6 +52,38 @@ tdb --help
 ```
 
 See `tdb <command> --help` for details on each command. Configuration is stored under `~/.config/tdb/config.yaml` by default.
+
+## Syncing existing data
+
+The CLI can upsert existing collections and documents from JSON definitions. Each command accepts inline JSON, a file path, or `--stdin`.
+
+-   Create or update collection schemas and primary-key metadata:
+
+    ```bash
+    tdb tenant collections sync --file collections.json
+    ```
+
+    The payload can be an array or object keyed by collection name:
+
+    ```json
+    [
+        {
+            "name": "users",
+            "schema": { "type": "object" },
+            "primary_key": { "field": "id", "type": "string" }
+        }
+    ]
+    ```
+
+    Collections that don’t already exist are provisioned automatically using the supplied schema and primary-key definition; existing collections are updated in place.
+
+-   Patch or replace documents by primary key:
+
+    ```bash
+    tdb tenant documents sync users --mode patch --stdin < users.jsonl
+    ```
+
+    Each document must include the primary key (defaults to the collection key). Reserved metadata fields such as `id`, `key`, and timestamps are stripped automatically when patching. If a document is missing it will be created by default; pass `--skip-missing` to keep the old “update only” behavior. Use `--mode update` to perform full replacements instead of JSON merge patches.
 
 ## Releases
 

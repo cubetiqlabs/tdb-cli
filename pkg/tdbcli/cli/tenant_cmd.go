@@ -36,6 +36,7 @@ func registerTenantCommands(root *cobra.Command, env *Environment) {
 	collectionsCmd.AddCommand(newTenantCollectionsGetCommand(env))
 	collectionsCmd.AddCommand(newTenantCollectionsCreateCommand(env))
 	collectionsCmd.AddCommand(newTenantCollectionsUpdateCommand(env))
+	collectionsCmd.AddCommand(newTenantCollectionsSyncCommand(env))
 	collectionsCmd.AddCommand(newTenantCollectionsDeleteCommand(env))
 	collectionsCmd.AddCommand(newTenantCollectionsCountCommand(env))
 	tenantCmd.AddCommand(collectionsCmd)
@@ -53,6 +54,7 @@ func registerTenantCommands(root *cobra.Command, env *Environment) {
 	documentsCmd.AddCommand(newTenantDocumentsBulkCreateCommand(env))
 	documentsCmd.AddCommand(newTenantDocumentsCountCommand(env))
 	documentsCmd.AddCommand(newTenantDocumentsExportCommand(env))
+	documentsCmd.AddCommand(newTenantDocumentsSyncCommand(env))
 	tenantCmd.AddCommand(documentsCmd)
 
 	queriesCmd := &cobra.Command{

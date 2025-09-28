@@ -2,11 +2,14 @@ package cli
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -621,6 +624,401 @@ func newTenantDocumentsExportCommand(env *Environment) *cobra.Command {
 	cmd.Flags().BoolVar(&includeMeta, "include-meta", false, "Include document metadata alongside payload data")
 	cmd.Flags().IntVar(&pageSize, "page-size", 100, "Number of documents to fetch per page")
 	return cmd
+}
+
+func newTenantDocumentsSyncCommand(env *Environment) *cobra.Command {
+	var auth authFlags
+	var data string
+	var file string
+	var stdin bool
+	var mode string
+	var keyField string
+	var skipMissing bool
+
+	cmd := &cobra.Command{
+		Use:   "sync <collection>",
+		Short: "Sync documents by primary key from JSON payload (create or update)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			envCtx, err := requireEnvironment(env)
+			if err != nil {
+				return err
+			}
+			tenantClient, _, _, err := auth.resolveTenantClient(envCtx, cmd)
+			if err != nil {
+				return err
+			}
+			collection := strings.TrimSpace(args[0])
+			if collection == "" {
+				return errors.New("collection name cannot be empty")
+			}
+			modeValue := strings.ToLower(strings.TrimSpace(mode))
+			if modeValue == "" {
+				modeValue = "patch"
+			}
+			if modeValue != "patch" && modeValue != "update" {
+				return fmt.Errorf("unsupported mode %q (choose patch or update)", mode)
+			}
+			payload, err := readJSONPayload(cmd, data, file, stdin, false)
+			if err != nil {
+				return err
+			}
+			docs, err := decodeDocumentSyncPayload(payload)
+			if err != nil {
+				return err
+			}
+			if len(docs) == 0 {
+				return errors.New("no documents provided in payload")
+			}
+			col, err := tenantClient.GetCollection(cmd.Context(), collection, auth.appID)
+			if err != nil {
+				return err
+			}
+			pkField := strings.TrimSpace(keyField)
+			if pkField == "" {
+				pkField = strings.TrimSpace(col.PrimaryKeyField)
+				if pkField == "" {
+					pkField = "id"
+				}
+			}
+			pkType := strings.TrimSpace(col.PrimaryKeyType)
+			if pkType == "" {
+				pkType = "string"
+			}
+			keepPrimary := modeValue == "update"
+			var created, updated, unchanged, skipped, missing, failed int
+			for idx, rawDoc := range docs {
+				keyValue, err := extractDocumentKey(rawDoc, pkField, pkType)
+				if err != nil || strings.TrimSpace(keyValue) == "" {
+					fmt.Fprintf(cmd.ErrOrStderr(), "[%d] skipping: %v\n", idx, firstNonNil(err, errors.New("missing primary key value")))
+					skipped++
+					continue
+				}
+				existing, err := tenantClient.GetDocumentByPrimaryKey(cmd.Context(), collection, keyValue, auth.appID)
+				if err != nil {
+					if isNotFoundError(err) {
+						if skipMissing {
+							fmt.Fprintf(cmd.ErrOrStderr(), "[%d] document %s not found; skipping\n", idx, keyValue)
+							missing++
+							continue
+						}
+						createPayload := prepareDocumentCreatePayload(rawDoc, pkField)
+						encoded, err := json.Marshal(createPayload)
+						if err != nil {
+							fmt.Fprintf(cmd.ErrOrStderr(), "[%d] encode %s failed: %v\n", idx, keyValue, err)
+							failed++
+							continue
+						}
+						result, err := tenantClient.CreateDocument(cmd.Context(), collection, encoded, auth.appID)
+						if err != nil {
+							fmt.Fprintf(cmd.ErrOrStderr(), "[%d] create %s failed: %v\n", idx, keyValue, err)
+							failed++
+							continue
+						}
+						fmt.Fprintf(cmd.OutOrStdout(), "Synced document %s (created %s)\n", keyValue, formatRelativeTime(result.CreatedAt, "just now"))
+						created++
+						continue
+					}
+					fmt.Fprintf(cmd.ErrOrStderr(), "[%d] lookup %s failed: %v\n", idx, keyValue, err)
+					failed++
+					continue
+				}
+				payloadMap := prepareDocumentSyncPayload(rawDoc, pkField, keepPrimary)
+				if len(payloadMap) == 0 {
+					fmt.Fprintf(cmd.ErrOrStderr(), "[%d] document %s has no mutable fields; skipping\n", idx, keyValue)
+					skipped++
+					continue
+				}
+				skipUpdate, cmpErr := shouldSkipDocumentSync(existing.Data, payloadMap, pkField, keepPrimary, modeValue)
+				if cmpErr != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "[%d] compare %s failed: %v\n", idx, keyValue, cmpErr)
+				} else if skipUpdate {
+					fmt.Fprintf(cmd.OutOrStdout(), "Synced document %s (unchanged)\n", keyValue)
+					unchanged++
+					continue
+				}
+				encoded, err := json.Marshal(payloadMap)
+				if err != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "[%d] encode %s failed: %v\n", idx, keyValue, err)
+					failed++
+					continue
+				}
+				var result *clientpkg.Document
+				if modeValue == "patch" {
+					result, err = tenantClient.PatchDocument(cmd.Context(), collection, existing.ID, encoded, auth.appID)
+				} else {
+					result, err = tenantClient.UpdateDocument(cmd.Context(), collection, existing.ID, encoded, auth.appID)
+				}
+				if err != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "[%d] sync %s failed: %v\n", idx, keyValue, err)
+					failed++
+					continue
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "Synced document %s (updated %s)\n", keyValue, formatRelativeTime(result.UpdatedAt, "just now"))
+				updated++
+			}
+			fmt.Fprintf(cmd.ErrOrStderr(), "Documents synced: created %d, updated %d, unchanged %d, skipped %d, missing %d, failed %d\n", created, updated, unchanged, skipped, missing, failed)
+			if failed > 0 {
+				return fmt.Errorf("failed to sync %d document(s)", failed)
+			}
+			return nil
+		},
+	}
+
+	auth.bindWithApp(cmd)
+	cmd.Flags().StringVar(&data, "data", "", "Inline JSON payload containing document data")
+	cmd.Flags().StringVar(&file, "file", "", "Path to JSON file containing document data")
+	cmd.Flags().BoolVar(&stdin, "stdin", false, "Read document data from stdin")
+	cmd.Flags().StringVar(&mode, "mode", "patch", "Sync mode: patch (default) or update")
+	cmd.Flags().StringVar(&keyField, "key-field", "", "Override primary key field name used for matching")
+	cmd.Flags().BoolVar(&skipMissing, "skip-missing", false, "Skip documents that are not found instead of creating them")
+	return cmd
+}
+
+func decodeDocumentSyncPayload(raw []byte) ([]map[string]any, error) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return nil, nil
+	}
+	var docs []map[string]any
+	switch trimmed[0] {
+	case '[':
+		if err := json.Unmarshal(trimmed, &docs); err != nil {
+			return nil, fmt.Errorf("decode document array: %w", err)
+		}
+	case '{':
+		var single map[string]any
+		if err := json.Unmarshal(trimmed, &single); err == nil {
+			docs = append(docs, single)
+			break
+		}
+		return nil, fmt.Errorf("invalid document payload: expected JSON object or array")
+	default:
+		return nil, fmt.Errorf("invalid document payload: expected JSON object or array")
+	}
+	return docs, nil
+}
+
+func extractDocumentKey(doc map[string]any, pkField, pkType string) (string, error) {
+	candidates := []string{pkField, "key", "id"}
+	for _, field := range candidates {
+		if strings.TrimSpace(field) == "" {
+			continue
+		}
+		if value, ok := doc[field]; ok {
+			key, err := stringifyKey(value, pkType)
+			if err != nil {
+				return "", err
+			}
+			if key != "" {
+				return key, nil
+			}
+		}
+		// also consider lowercase key variations
+		if value, ok := doc[strings.ToLower(field)]; ok {
+			key, err := stringifyKey(value, pkType)
+			if err != nil {
+				return "", err
+			}
+			if key != "" {
+				return key, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("primary key field %s not present", pkField)
+}
+
+func stringifyKey(value interface{}, pkType string) (string, error) {
+	switch v := value.(type) {
+	case string:
+		if strings.TrimSpace(v) == "" {
+			return "", fmt.Errorf("primary key cannot be empty")
+		}
+		return strings.TrimSpace(v), nil
+	case float64:
+		if pkType == "number" {
+			return strconv.FormatInt(int64(v), 10), nil
+		}
+		return strings.TrimSpace(fmt.Sprintf("%v", v)), nil
+	case json.Number:
+		if pkType == "number" {
+			i, err := v.Int64()
+			if err != nil {
+				return "", err
+			}
+			return strconv.FormatInt(i, 10), nil
+		}
+		return v.String(), nil
+	case nil:
+		return "", fmt.Errorf("primary key is nil")
+	default:
+		s := strings.TrimSpace(fmt.Sprintf("%v", v))
+		if s == "" {
+			return "", fmt.Errorf("primary key cannot be empty")
+		}
+		return s, nil
+	}
+}
+
+func prepareDocumentSyncPayload(source map[string]any, pkField string, keepPrimary bool) map[string]any {
+	cleaned := make(map[string]any)
+	for key, value := range source {
+		lower := strings.ToLower(key)
+		if _, forbidden := documentSyncReservedFields[lower]; forbidden {
+			continue
+		}
+		if !keepPrimary && strings.EqualFold(key, pkField) {
+			continue
+		}
+		cleaned[key] = value
+	}
+	if keepPrimary {
+		if value, ok := source[pkField]; ok {
+			cleaned[pkField] = value
+		} else if value, ok := source[strings.ToLower(pkField)]; ok {
+			cleaned[pkField] = value
+		}
+	}
+	return cleaned
+}
+
+func prepareDocumentCreatePayload(source map[string]any, pkField string) map[string]any {
+	cleaned := make(map[string]any)
+	for key, value := range source {
+		lower := strings.ToLower(key)
+		if _, forbidden := documentSyncReservedFields[lower]; forbidden && !strings.EqualFold(key, pkField) {
+			continue
+		}
+		cleaned[key] = value
+	}
+	if _, ok := cleaned[pkField]; !ok {
+		if value, ok := source[strings.ToLower(pkField)]; ok {
+			cleaned[pkField] = value
+		}
+	}
+	return cleaned
+}
+
+var documentSyncReservedFields = map[string]struct{}{
+	"id":            {},
+	"tenant_id":     {},
+	"collection_id": {},
+	"key":           {},
+	"key_numeric":   {},
+	"created_at":    {},
+	"updated_at":    {},
+	"deleted_at":    {},
+}
+
+func shouldSkipDocumentSync(existingJSON string, payload map[string]any, pkField string, keepPrimary bool, mode string) (bool, error) {
+	if len(payload) == 0 {
+		return false, nil
+	}
+	trimmed := strings.TrimSpace(existingJSON)
+	if trimmed == "" {
+		return false, nil
+	}
+	var current map[string]any
+	if err := json.Unmarshal([]byte(trimmed), &current); err != nil {
+		return false, fmt.Errorf("decode existing document: %w", err)
+	}
+	existingComparable := sanitizeDocumentComparisonMap(current, pkField, keepPrimary)
+	payloadComparable := sanitizeDocumentComparisonMap(payload, pkField, keepPrimary)
+	if strings.EqualFold(mode, "patch") {
+		for key, newVal := range payloadComparable {
+			existingVal, ok := existingComparable[key]
+			if !ok {
+				return false, nil
+			}
+			if !reflect.DeepEqual(existingVal, newVal) {
+				return false, nil
+			}
+		}
+		return true, nil
+	}
+	if len(existingComparable) != len(payloadComparable) {
+		return false, nil
+	}
+	if reflect.DeepEqual(existingComparable, payloadComparable) {
+		return true, nil
+	}
+	return false, nil
+}
+
+func sanitizeDocumentComparisonMap(source map[string]any, pkField string, keepPrimary bool) map[string]any {
+	cleaned := make(map[string]any)
+	if source == nil {
+		return cleaned
+	}
+	pkFieldTrim := strings.TrimSpace(pkField)
+	for key, value := range source {
+		lower := strings.ToLower(key)
+		if _, reserved := documentSyncReservedFields[lower]; reserved && !(keepPrimary && pkFieldTrim != "" && strings.EqualFold(key, pkFieldTrim)) {
+			continue
+		}
+		if !keepPrimary && pkFieldTrim != "" && strings.EqualFold(key, pkFieldTrim) {
+			continue
+		}
+		cleaned[key] = normalizeDocumentValue(value)
+	}
+	if keepPrimary && pkFieldTrim != "" {
+		if _, ok := cleaned[pkFieldTrim]; !ok {
+			if value, ok := source[pkFieldTrim]; ok {
+				cleaned[pkFieldTrim] = normalizeDocumentValue(value)
+			} else if value, ok := source[strings.ToLower(pkFieldTrim)]; ok {
+				cleaned[pkFieldTrim] = normalizeDocumentValue(value)
+			}
+		}
+	}
+	return cleaned
+}
+
+func normalizeDocumentValue(value any) any {
+	switch v := value.(type) {
+	case map[string]interface{}:
+		return normalizeDocumentMap(v)
+	case []interface{}:
+		result := make([]any, len(v))
+		for i, item := range v {
+			result[i] = normalizeDocumentValue(item)
+		}
+		return result
+	case json.Number:
+		if strings.Contains(v.String(), ".") {
+			if f, err := v.Float64(); err == nil {
+				return f
+			}
+		}
+		if i, err := v.Int64(); err == nil {
+			return float64(i)
+		}
+		return v.String()
+	default:
+		return v
+	}
+}
+
+func normalizeDocumentMap(source map[string]interface{}) map[string]any {
+	result := make(map[string]any, len(source))
+	for key, value := range source {
+		result[key] = normalizeDocumentValue(value)
+	}
+	return result
+}
+
+func isNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "not found") || strings.Contains(msg, "404")
+}
+
+func firstNonNil(err error, fallback error) error {
+	if err != nil {
+		return err
+	}
+	return fallback
 }
 
 func splitCommaList(value string) []string {
