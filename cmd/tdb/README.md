@@ -56,6 +56,16 @@ Artifacts will be written to `dist/<target>/` alongside `.zip`/`.tar.gz` archive
 
 Simply replace the binary with the latest release or rebuild from source. Run `tdb version` to confirm the update.
 
+### 4. Tagging a release from the TinyDB monorepo
+
+When changes are ready to publish, create and push a version tag directly from the TinyDB repository using the helper script:
+
+```bash
+scripts/tag_release.sh 0.4.0 "Release v0.4.0"
+```
+
+The script ensures your working tree is clean, fast-forwards the branch, prefixes the tag with `v` if missing, and pushes it to `origin` (override with `REMOTE=...`). Once the tag is pushed, rerun `scripts/export_tdb_cli.sh` to publish the latest CLI code to the public `tdb-cli` repository.
+
 ## Configuration
 
 The CLI keeps persistent state in a YAML file located at:
