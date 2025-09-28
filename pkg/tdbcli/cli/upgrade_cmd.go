@@ -15,6 +15,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
+	"syscall"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -35,6 +38,8 @@ type githubRelease struct {
 		BrowserDownloadURL string `json:"browser_download_url"`
 	} `json:"assets"`
 }
+
+var upgradeNoticeOnce sync.Once
 
 func newUpgradeCommand() *cobra.Command {
 	var checkOnly bool
@@ -113,6 +118,55 @@ func runUpgrade(ctx context.Context, cmd *cobra.Command, checkOnly bool) error {
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Successfully updated tdb to %s.\n", latest)
 	return nil
+}
+
+func scheduleUpgradeNotice(cmd *cobra.Command) {
+	if cmd == nil {
+		return
+	}
+	// Avoid redundant notice when the user explicitly runs the upgrade command.
+	if strings.EqualFold(cmd.Name(), "upgrade") {
+		return
+	}
+	upgradeNoticeOnce.Do(func() {
+		writer := cmd.ErrOrStderr()
+		ctx := cmd.Context()
+		go func(parent context.Context, out io.Writer) {
+			if parent == nil {
+				parent = context.Background()
+			}
+			timedCtx, cancel := context.WithTimeout(parent, 3*time.Second)
+			defer cancel()
+			latest, current, err := detectAvailableUpdate(timedCtx)
+			if err != nil || latest == "" {
+				return
+			}
+			fmt.Fprintf(out, "Update available: tdb CLI %s (current %s). Run \"tdb upgrade\" to install.\n", latest, current)
+		}(ctx, writer)
+	})
+}
+
+func detectAvailableUpdate(ctx context.Context) (string, string, error) {
+	current := versionpkg.Number()
+	if current == "" || current == "dev" {
+		return "", current, nil
+	}
+	release, err := fetchLatestRelease(ctx)
+	if err != nil {
+		return "", current, err
+	}
+	latest := sanitizeVersion(release.TagName)
+	if latest == "" {
+		return "", current, nil
+	}
+	cmp, err := compareVersions(current, latest)
+	if err != nil {
+		return "", current, err
+	}
+	if cmp >= 0 {
+		return "", current, nil
+	}
+	return latest, current, nil
 }
 
 func fetchLatestRelease(ctx context.Context) (*githubRelease, error) {
@@ -321,12 +375,35 @@ func installOnUnix(newBinary, exePath string) error {
 	backup := exePath + ".bak"
 	_ = os.Remove(backup)
 	if err := os.Rename(exePath, backup); err != nil {
+		// check if the error is because of permission denied
+		if os.IsPermission(err) {
+			return fmt.Errorf("permission denied when renaming current binary. Please run the upgrade command with sufficient permissions (e.g. using sudo)")
+		}
 		return fmt.Errorf("backup current binary: %w", err)
 	}
 	if err := os.Rename(newBinary, exePath); err != nil {
+		if os.IsPermission(err) {
+			_ = os.Rename(backup, exePath)
+			return fmt.Errorf("permission denied when installing new binary. Please run the upgrade command with sufficient permissions (e.g. using sudo)")
+		}
+		var linkErr *os.LinkError
+		if errors.As(err, &linkErr) && errors.Is(linkErr.Err, syscall.EXDEV) {
+			if copyErr := copyFile(newBinary, exePath); copyErr != nil {
+				_ = os.Rename(backup, exePath)
+				return fmt.Errorf("install new binary (copy fallback): %w", copyErr)
+			}
+			if chmodErr := os.Chmod(exePath, 0o755); chmodErr != nil {
+				_ = os.Rename(backup, exePath)
+				return fmt.Errorf("set permissions on new binary: %w", chmodErr)
+			}
+			_ = os.Remove(backup)
+			return nil
+		}
 		_ = os.Rename(backup, exePath)
 		return fmt.Errorf("install new binary: %w", err)
 	}
+	// cleanup backup
+	_ = os.Remove(backup)
 	return nil
 }
 
@@ -336,6 +413,10 @@ func installOnWindows(newBinary, exePath string, cmd *cobra.Command) error {
 	}
 	pending := exePath + ".new"
 	if err := copyFile(newBinary, pending); err != nil {
+		// check if the error is because of permission denied
+		if os.IsPermission(err) {
+			return fmt.Errorf("permission denied when preparing new binary. Please run the upgrade command with sufficient permissions (e.g. Run as Administrator)")
+		}
 		return fmt.Errorf("prepare replacement: %w", err)
 	}
 	pid := os.Getpid()

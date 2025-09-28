@@ -62,6 +62,7 @@ func NewRootCommand() *cobra.Command {
 			if root := cmd.Root(); root != cmd {
 				root.SetContext(ctx)
 			}
+			scheduleUpgradeNotice(cmd)
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
