@@ -299,6 +299,28 @@ tdb tenant auth --tenant tenant_123 --key checkout
 
 Pass `--raw` to inspect the raw `/api/me` payload or `--app-id` to override the scoped application when testing aliases.
 
+### Upgrade and Installation
+
+Check for a newer CLI release and install it in-place:
+
+```bash
+tdb upgrade
+```
+
+Use `tdb upgrade --check` to only report availability without downloading.
+
+Quick install (macOS/Linux):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/cubetiqlabs/tinydb/main/scripts/install.sh | bash
+```
+
+Quick install (Windows PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/cubetiqlabs/tinydb/main/scripts/install.ps1 | iex
+```
+
 ## Output and color
 
 The CLI renders unicode tables with alternating row styles when stdout is a TTY. Set `NO_COLOR=1` to disable ANSI colors, or `FORCE_COLOR=1` to force-enable them in pipelines.
