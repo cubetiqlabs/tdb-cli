@@ -1,0 +1,18 @@
+{
+    "sku": {
+        "type": "string",
+        "description": "Stock Keeping Unit, unique identifier for the product",
+        "pattern": "^[A-Z0-9]{8}$"
+    },
+    "name": {
+        "type": "string",
+        "description": "Name of the product",
+        "minLength": 1,
+        "maxLength": 100
+    },
+    "qty": {
+        "type": "integer",
+        "description": "Quantity of the product in stock",
+        "minimum": 0
+    }
+}

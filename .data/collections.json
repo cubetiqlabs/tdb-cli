@@ -1,0 +1,12 @@
+    [
+        {
+            "name": "users",
+            "schema": { "type": "object" },
+            "primary_key": { "field": "id", "type": "string" }
+        },
+        {
+            "name": "customers",
+            "schema": { "type": "object" },
+            "primary_key": { "field": "id", "type": "string" }
+        }
+    ]
