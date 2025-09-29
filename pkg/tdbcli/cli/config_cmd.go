@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
+	clientpkg "github.com/cubetiqlabs/tdb-cli/pkg/tdbcli/client"
 	configpkg "github.com/cubetiqlabs/tdb-cli/pkg/tdbcli/config"
 )
 
@@ -131,7 +132,7 @@ func newConfigDeleteKeyCommand(env *Environment) *cobra.Command {
 func newConfigSetCommand(env *Environment) *cobra.Command {
 	return &cobra.Command{
 		Use:   "set <field> [values...]",
-		Short: "Update core CLI settings (endpoint, admin-secret, default-key, tenant-name, default-tenant)",
+		Short: "Update core CLI settings (endpoint, admin-secret, api-key, default-key, tenant-name, default-tenant)",
 		Args:  cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
@@ -174,6 +175,52 @@ func newConfigSetCommand(env *Environment) *cobra.Command {
 					return err
 				}
 				fmt.Fprintf(cmd.OutOrStdout(), "Set key %s as default for tenant %s\n", args[2], args[1])
+			case "api-key", "api_key":
+				if len(args) != 2 {
+					return errors.New("usage: tdb config set api-key <api_key>")
+				}
+				apiKey := strings.TrimSpace(args[1])
+				if apiKey == "" {
+					return errors.New("api key cannot be empty")
+				}
+				endpoint, err := ensureEndpoint(envCtx)
+				if err != nil {
+					return err
+				}
+				tenantClient, err := clientpkg.NewTenantClient(endpoint, apiKey)
+				if err != nil {
+					return fmt.Errorf("create tenant client: %w", err)
+				}
+				status, err := tenantClient.AuthStatus(cmd.Context(), "")
+				if err != nil {
+					return fmt.Errorf("api key verification failed: %w", err)
+				}
+				tenantID := strings.TrimSpace(status.TenantID)
+				if tenantID == "" {
+					return errors.New("api key verification succeeded but tenant id is missing")
+				}
+				alias := strings.TrimSpace(status.KeyPrefix)
+				if alias == "" {
+					alias = strings.TrimSpace(status.AppID)
+				}
+				if alias == "" {
+					alias = "default"
+				}
+				entry := configpkg.APIKeyEntry{
+					Key:    apiKey,
+					Prefix: strings.TrimSpace(status.KeyPrefix),
+					AppID:  strings.TrimSpace(status.AppID),
+				}
+				if desc := strings.TrimSpace(status.AppName); desc != "" {
+					entry.Description = desc
+				} else if scope := strings.TrimSpace(status.Scope); scope != "" {
+					entry.Description = scope
+				}
+				tenantName := strings.TrimSpace(status.TenantName)
+				if err := storeAPIKey(envCtx, tenantID, alias, entry, true, tenantName); err != nil {
+					return err
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "Verified key for tenant %s and stored as alias %s (default)\n", tenantID, alias)
 			case "default-tenant", "default_tenant":
 				if len(args) != 2 {
 					return errors.New("usage: tdb config set default-tenant <tenant_id>")
@@ -200,7 +247,7 @@ func newConfigSetCommand(env *Environment) *cobra.Command {
 				}
 				fmt.Fprintf(cmd.OutOrStdout(), "Tenant %s labeled as %s\n", tenantID, name)
 			default:
-				return fmt.Errorf("unknown config field %q; supported values: endpoint, admin-secret, default-key, tenant-name, default-tenant", field)
+				return fmt.Errorf("unknown config field %q; supported values: endpoint, admin-secret, api-key, default-key, tenant-name, default-tenant", field)
 			}
 			return nil
 		},
