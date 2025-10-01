@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // TenantClient interacts with tenant-scoped endpoints using API keys.
@@ -596,6 +597,50 @@ func (c *TenantClient) DeleteSavedQueryByName(ctx context.Context, name string, 
 		return err
 	}
 	return c.DeleteSavedQueryByID(ctx, doc.ID, purge, appID, confirm)
+}
+
+// ListAuditLogs retrieves audit log entries for the tenant with optional filters.
+func (c *TenantClient) ListAuditLogs(ctx context.Context, params ListAuditLogsParams) ([]AuditLog, error) {
+	values := url.Values{}
+	if params.Limit > 0 {
+		values.Set("limit", strconv.Itoa(params.Limit))
+	}
+	if trimmed := strings.TrimSpace(params.CollectionID); trimmed != "" {
+		values.Set("collection", trimmed)
+	}
+	if trimmed := strings.TrimSpace(params.DocumentID); trimmed != "" {
+		values.Set("document_id", trimmed)
+	}
+	if trimmed := strings.TrimSpace(params.Operation); trimmed != "" {
+		values.Set("operation", strings.ToLower(trimmed))
+	}
+	if trimmed := strings.TrimSpace(params.Actor); trimmed != "" {
+		values.Set("actor", trimmed)
+	}
+	if params.Since != nil && !params.Since.IsZero() {
+		values.Set("since", params.Since.UTC().Format(time.RFC3339))
+	}
+	if params.Until != nil && !params.Until.IsZero() {
+		values.Set("until", params.Until.UTC().Format(time.RFC3339))
+	}
+	if len(params.Sort) > 0 {
+		values.Set("sort", strings.Join(params.Sort, ","))
+	}
+	path := "/api/audit"
+	if encoded := values.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	req, err := c.newJSONRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.authorize(req)
+	c.applyAppScope(req, params.AppID)
+	var resp AuditLogListResponse
+	if err := c.do(req, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Items, nil
 }
 
 // AuthStatus retrieves the authentication context for the current API key via /api/me.

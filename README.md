@@ -11,6 +11,8 @@ TinyDB CLI is a standalone command-line interface for managing TinyDB tenants, c
 -   Collection & schema lifecycle commands
 -   Document CRUD and bulk operations
 -   Saved query lifecycle and execution helpers
+-   Audit log inspection with filtering and sorting
+-   Document version metadata for optimistic concurrency (timestamps + sequence headers)
 -   Real-time authentication check via `/api/me`
 -   Offline export helpers and install scripts
 -   Self-upgrade via `tdb upgrade`
@@ -52,6 +54,16 @@ tdb --help
 ```
 
 See `tdb <command> --help` for details on each command. Configuration is stored under `~/.config/tdb/config.yaml` by default.
+
+### Audit logs
+
+List the most recent audit entries for a tenant, optionally filtering by collection, document, actor, or time window:
+
+```bash
+tdb tenant audit --collection users --since 48h --sort created_at --raw-pretty
+```
+
+Relative durations (`1h`, `2d`, etc.) are resolved against the current time; fallback to RFC3339 timestamps for absolute ranges. Use `--raw` for compact JSON and `--raw-pretty` for pretty-printed output.
 
 ## Syncing existing data
 

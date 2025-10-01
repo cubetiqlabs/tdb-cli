@@ -75,9 +75,24 @@ type Document struct {
 	Key          string     `json:"key"`
 	KeyNumeric   *int64     `json:"key_numeric"`
 	Data         string     `json:"data"`
+	Version      int64      `json:"version"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 	DeletedAt    *time.Time `json:"deleted_at"`
+}
+
+// AuditLog captures history entries for document lifecycle events.
+type AuditLog struct {
+	ID              uint      `json:"id"`
+	TenantID        string    `json:"tenant_id"`
+	CollectionID    string    `json:"collection_id"`
+	DocumentID      string    `json:"document_id"`
+	DocumentVersion int64     `json:"document_version"`
+	Operation       string    `json:"operation"`
+	Actor           string    `json:"actor"`
+	OldData         string    `json:"old_data"`
+	NewData         string    `json:"new_data"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 // DocumentPagination exposes pagination metadata for list endpoints.
@@ -91,6 +106,11 @@ type DocumentPagination struct {
 type DocumentListResponse struct {
 	Items      []Document         `json:"items"`
 	Pagination DocumentPagination `json:"pagination"`
+}
+
+// AuditLogListResponse wraps audit log list responses.
+type AuditLogListResponse struct {
+	Items []AuditLog `json:"items"`
 }
 
 // DocumentBulkResponse is returned by bulk create endpoints.
@@ -142,6 +162,19 @@ type ListDocumentsParams struct {
 	IncludeDeleted bool
 	SelectFields   []string
 	Filters        map[string]string
+}
+
+// ListAuditLogsParams configures audit log retrieval.
+type ListAuditLogsParams struct {
+	AppID        string
+	Limit        int
+	CollectionID string
+	DocumentID   string
+	Operation    string
+	Actor        string
+	Since        *time.Time
+	Until        *time.Time
+	Sort         []string
 }
 
 // Application represents the application resource exposed via tenant API.

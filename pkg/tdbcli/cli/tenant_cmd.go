@@ -71,6 +71,9 @@ func registerTenantCommands(root *cobra.Command, env *Environment) {
 	queriesCmd.AddCommand(newTenantQueriesParamsTemplateCommand(env))
 	tenantCmd.AddCommand(queriesCmd)
 
+	auditCmd := newTenantAuditCommand(env)
+	tenantCmd.AddCommand(auditCmd)
+
 	authCmd := newTenantAuthCommand(env)
 	tenantCmd.AddCommand(authCmd)
 

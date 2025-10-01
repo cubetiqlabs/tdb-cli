@@ -221,6 +221,82 @@ func printJSON(cmd *cobra.Command, value interface{}) error {
 	return enc.Encode(value)
 }
 
+func printCompactJSON(cmd *cobra.Command, value interface{}) error {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(cmd.OutOrStdout(), string(data))
+	return err
+}
+
+func coerceJSONValue(raw string) interface{} {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+	var value interface{}
+	if err := json.Unmarshal([]byte(trimmed), &value); err == nil {
+		return value
+	}
+	return trimmed
+}
+
+func makeAuditLogsPretty(items []clientpkg.AuditLog) []map[string]any {
+	result := make([]map[string]any, 0, len(items))
+	for _, entry := range items {
+		row := map[string]any{
+			"id":               entry.ID,
+			"tenant_id":        entry.TenantID,
+			"collection_id":    entry.CollectionID,
+			"document_id":      entry.DocumentID,
+			"document_version": entry.DocumentVersion,
+			"operation":        entry.Operation,
+			"actor":            entry.Actor,
+			"created_at":       entry.CreatedAt,
+			"old_data":         coerceJSONValue(entry.OldData),
+			"new_data":         coerceJSONValue(entry.NewData),
+		}
+		result = append(result, row)
+	}
+	return result
+}
+
+func makeDocumentPretty(doc clientpkg.Document) map[string]any {
+	row := map[string]any{
+		"id":            doc.ID,
+		"tenant_id":     doc.TenantID,
+		"collection_id": doc.CollectionID,
+		"key":           doc.Key,
+		"key_numeric":   doc.KeyNumeric,
+		"version":       doc.Version,
+		"created_at":    doc.CreatedAt,
+		"updated_at":    doc.UpdatedAt,
+		"deleted_at":    doc.DeletedAt,
+		"data":          coerceJSONValue(doc.Data),
+	}
+	return row
+}
+
+func makeDocumentListPretty(resp *clientpkg.DocumentListResponse) map[string]any {
+	items := make([]map[string]any, 0, len(resp.Items))
+	for _, item := range resp.Items {
+		items = append(items, makeDocumentPretty(item))
+	}
+	return map[string]any{
+		"items":      items,
+		"pagination": resp.Pagination,
+	}
+}
+
+func makeDocumentBulkPretty(resp *clientpkg.DocumentBulkResponse) map[string]any {
+	items := make([]map[string]any, 0, len(resp.Items))
+	for _, item := range resp.Items {
+		items = append(items, makeDocumentPretty(item))
+	}
+	return map[string]any{"items": items}
+}
+
 func readFileContent(path string) (string, error) {
 	trimmed := strings.TrimSpace(path)
 	if trimmed == "" {

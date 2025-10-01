@@ -26,6 +26,7 @@ func newTenantDocumentsListCommand(env *Environment) *cobra.Command {
 	var selectFields string
 	var filters []string
 	var raw bool
+	var rawPretty bool
 	var cursor string
 
 	cmd := &cobra.Command{
@@ -72,7 +73,11 @@ func newTenantDocumentsListCommand(env *Environment) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if raw {
+			if raw || rawPretty {
+				if rawPretty {
+					payload := makeDocumentListPretty(resp)
+					return printJSON(cmd, payload)
+				}
 				return printJSON(cmd, resp)
 			}
 			if len(resp.Items) == 0 {
@@ -107,6 +112,7 @@ func newTenantDocumentsListCommand(env *Environment) *cobra.Command {
 	cmd.Flags().StringVar(&selectFields, "select", "", "Comma-separated list of fields to project")
 	cmd.Flags().StringArrayVar(&filters, "filter", nil, "Filter predicate in the form field=value (repeatable)")
 	cmd.Flags().BoolVar(&raw, "raw", false, "Print raw JSON response")
+	cmd.Flags().BoolVar(&rawPretty, "raw-pretty", false, "Print pretty JSON response")
 
 	return cmd
 }
@@ -114,6 +120,7 @@ func newTenantDocumentsListCommand(env *Environment) *cobra.Command {
 func newTenantDocumentsGetCommand(env *Environment) *cobra.Command {
 	var auth authFlags
 	var raw bool
+	var rawPretty bool
 	cmd := &cobra.Command{
 		Use:   "get <collection> <id>",
 		Short: "Fetch a document by ID",
@@ -136,7 +143,10 @@ func newTenantDocumentsGetCommand(env *Environment) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if raw {
+			if raw || rawPretty {
+				if rawPretty {
+					return printJSON(cmd, makeDocumentPretty(*doc))
+				}
 				return printJSON(cmd, doc)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "ID: %s\nKEY: %s\nCOLLECTION: %s\nCREATED: %s\nUPDATED: %s\n",
@@ -155,6 +165,7 @@ func newTenantDocumentsGetCommand(env *Environment) *cobra.Command {
 	}
 	auth.bindWithApp(cmd)
 	cmd.Flags().BoolVar(&raw, "raw", false, "Print raw JSON response")
+	cmd.Flags().BoolVar(&rawPretty, "raw-pretty", false, "Print pretty JSON response")
 	return cmd
 }
 
@@ -164,6 +175,7 @@ func newTenantDocumentsCreateCommand(env *Environment) *cobra.Command {
 	var file string
 	var stdin bool
 	var raw bool
+	var rawPretty bool
 
 	cmd := &cobra.Command{
 		Use:   "create <collection>",
@@ -190,7 +202,10 @@ func newTenantDocumentsCreateCommand(env *Environment) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if raw {
+			if raw || rawPretty {
+				if rawPretty {
+					return printJSON(cmd, makeDocumentPretty(*doc))
+				}
 				return printJSON(cmd, doc)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Created document %s\n", doc.ID)
@@ -203,6 +218,7 @@ func newTenantDocumentsCreateCommand(env *Environment) *cobra.Command {
 	cmd.Flags().StringVar(&file, "file", "", "Path to JSON payload file")
 	cmd.Flags().BoolVar(&stdin, "stdin", false, "Read JSON payload from stdin")
 	cmd.Flags().BoolVar(&raw, "raw", false, "Print raw JSON response")
+	cmd.Flags().BoolVar(&rawPretty, "raw-pretty", false, "Print pretty JSON response")
 
 	return cmd
 }
@@ -213,6 +229,7 @@ func newTenantDocumentsUpdateCommand(env *Environment) *cobra.Command {
 	var file string
 	var stdin bool
 	var raw bool
+	var rawPretty bool
 
 	cmd := &cobra.Command{
 		Use:   "update <collection> <id>",
@@ -240,7 +257,10 @@ func newTenantDocumentsUpdateCommand(env *Environment) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if raw {
+			if raw || rawPretty {
+				if rawPretty {
+					return printJSON(cmd, makeDocumentPretty(*doc))
+				}
 				return printJSON(cmd, doc)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Updated document %s\n", doc.ID)
@@ -253,6 +273,7 @@ func newTenantDocumentsUpdateCommand(env *Environment) *cobra.Command {
 	cmd.Flags().StringVar(&file, "file", "", "Path to JSON payload file")
 	cmd.Flags().BoolVar(&stdin, "stdin", false, "Read JSON payload from stdin")
 	cmd.Flags().BoolVar(&raw, "raw", false, "Print raw JSON response")
+	cmd.Flags().BoolVar(&rawPretty, "raw-pretty", false, "Print pretty JSON response")
 
 	return cmd
 }
@@ -263,6 +284,7 @@ func newTenantDocumentsPatchCommand(env *Environment) *cobra.Command {
 	var file string
 	var stdin bool
 	var raw bool
+	var rawPretty bool
 
 	cmd := &cobra.Command{
 		Use:   "patch <collection> <id>",
@@ -290,7 +312,10 @@ func newTenantDocumentsPatchCommand(env *Environment) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if raw {
+			if raw || rawPretty {
+				if rawPretty {
+					return printJSON(cmd, makeDocumentPretty(*doc))
+				}
 				return printJSON(cmd, doc)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Patched document %s\n", doc.ID)
@@ -303,6 +328,7 @@ func newTenantDocumentsPatchCommand(env *Environment) *cobra.Command {
 	cmd.Flags().StringVar(&file, "file", "", "Path to JSON payload file")
 	cmd.Flags().BoolVar(&stdin, "stdin", false, "Read JSON payload from stdin")
 	cmd.Flags().BoolVar(&raw, "raw", false, "Print raw JSON response")
+	cmd.Flags().BoolVar(&rawPretty, "raw-pretty", false, "Print pretty JSON response")
 
 	return cmd
 }
@@ -361,6 +387,7 @@ func newTenantDocumentsBulkCreateCommand(env *Environment) *cobra.Command {
 	var file string
 	var stdin bool
 	var raw bool
+	var rawPretty bool
 
 	cmd := &cobra.Command{
 		Use:   "bulk-create <collection>",
@@ -387,7 +414,11 @@ func newTenantDocumentsBulkCreateCommand(env *Environment) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if raw {
+			if raw || rawPretty {
+				if rawPretty {
+					payload := makeDocumentBulkPretty(resp)
+					return printJSON(cmd, payload)
+				}
 				return printJSON(cmd, resp)
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Inserted %d documents\n", len(resp.Items))
@@ -400,6 +431,7 @@ func newTenantDocumentsBulkCreateCommand(env *Environment) *cobra.Command {
 	cmd.Flags().StringVar(&file, "file", "", "Path to JSON array payload file")
 	cmd.Flags().BoolVar(&stdin, "stdin", false, "Read JSON array payload from stdin")
 	cmd.Flags().BoolVar(&raw, "raw", false, "Print raw JSON response")
+	cmd.Flags().BoolVar(&rawPretty, "raw-pretty", false, "Print pretty JSON response")
 
 	return cmd
 }
