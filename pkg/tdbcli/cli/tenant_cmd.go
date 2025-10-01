@@ -53,6 +53,7 @@ func registerTenantCommands(root *cobra.Command, env *Environment) {
 	documentsCmd.AddCommand(newTenantDocumentsDeleteCommand(env))
 	documentsCmd.AddCommand(newTenantDocumentsBulkCreateCommand(env))
 	documentsCmd.AddCommand(newTenantDocumentsCountCommand(env))
+	documentsCmd.AddCommand(newTenantDocumentsReportCommand(env))
 	documentsCmd.AddCommand(newTenantDocumentsExportCommand(env))
 	documentsCmd.AddCommand(newTenantDocumentsSyncCommand(env))
 	tenantCmd.AddCommand(documentsCmd)

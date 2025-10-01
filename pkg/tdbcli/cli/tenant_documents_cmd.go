@@ -28,6 +28,7 @@ func newTenantDocumentsListCommand(env *Environment) *cobra.Command {
 	var raw bool
 	var rawPretty bool
 	var cursor string
+	var sortFields []string
 
 	cmd := &cobra.Command{
 		Use:   "list <collection>",
@@ -54,6 +55,11 @@ func newTenantDocumentsListCommand(env *Environment) *cobra.Command {
 				IncludeDeleted: includeDeleted,
 				Filters:        make(map[string]string),
 			}
+			normalizedSort, err := normalizeDocumentSortTokens(sortFields)
+			if err != nil {
+				return err
+			}
+			params.Sort = normalizedSort
 			if trimmed := strings.TrimSpace(selectFields); trimmed != "" {
 				params.SelectFields = splitCommaList(trimmed)
 			}
@@ -111,6 +117,7 @@ func newTenantDocumentsListCommand(env *Environment) *cobra.Command {
 	cmd.Flags().BoolVar(&includeDeleted, "include-deleted", false, "Include soft-deleted documents")
 	cmd.Flags().StringVar(&selectFields, "select", "", "Comma-separated list of fields to project")
 	cmd.Flags().StringArrayVar(&filters, "filter", nil, "Filter predicate in the form field=value (repeatable)")
+	cmd.Flags().StringSliceVar(&sortFields, "sort", []string{"-created_at"}, "Sort order (comma separated). Prefix with - for descending. Fields: created_at, updated_at, version, id, key, key_numeric, deleted_at")
 	cmd.Flags().BoolVar(&raw, "raw", false, "Print raw JSON response")
 	cmd.Flags().BoolVar(&rawPretty, "raw-pretty", false, "Print pretty JSON response")
 
@@ -436,6 +443,57 @@ func newTenantDocumentsBulkCreateCommand(env *Environment) *cobra.Command {
 	return cmd
 }
 
+func normalizeDocumentSortTokens(tokens []string) ([]string, error) {
+	if len(tokens) == 0 {
+		tokens = []string{"-created_at"}
+	}
+	expanded := make([]string, 0, len(tokens))
+	for _, v := range tokens {
+		parts := strings.Split(v, ",")
+		for _, p := range parts {
+			if trimmed := strings.TrimSpace(p); trimmed != "" {
+				expanded = append(expanded, trimmed)
+			}
+		}
+	}
+	if len(expanded) == 0 {
+		expanded = append(expanded, "-created_at")
+	}
+	allowed := map[string]struct{}{
+		"created_at":  {},
+		"updated_at":  {},
+		"version":     {},
+		"id":          {},
+		"key":         {},
+		"key_numeric": {},
+		"deleted_at":  {},
+	}
+	result := make([]string, 0, len(expanded))
+	for _, token := range expanded {
+		desc := false
+		field := token
+		if strings.HasPrefix(field, "-") {
+			desc = true
+			field = field[1:]
+		} else if strings.HasPrefix(field, "+") {
+			field = field[1:]
+		}
+		field = strings.ToLower(strings.TrimSpace(field))
+		if _, ok := allowed[field]; !ok || field == "" {
+			return nil, fmt.Errorf("unsupported sort field %q", token)
+		}
+		if desc {
+			result = append(result, "-"+field)
+		} else {
+			result = append(result, field)
+		}
+	}
+	if len(result) == 0 {
+		result = append(result, "-created_at")
+	}
+	return result, nil
+}
+
 func newTenantDocumentsCountCommand(env *Environment) *cobra.Command {
 	var auth authFlags
 	cmd := &cobra.Command{
@@ -464,6 +522,121 @@ func newTenantDocumentsCountCommand(env *Environment) *cobra.Command {
 		},
 	}
 	auth.bindWithApp(cmd)
+	return cmd
+}
+
+func newTenantDocumentsReportCommand(env *Environment) *cobra.Command {
+	var auth authFlags
+	var data string
+	var file string
+	var stdin bool
+	var limit int
+	var offset int
+	var cursor string
+	var selectFields string
+	var raw bool
+	var rawPretty bool
+
+	cmd := &cobra.Command{
+		Use:   "report <collection>",
+		Short: "Run a report query for a collection",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			envCtx, err := requireEnvironment(env)
+			if err != nil {
+				return err
+			}
+			tenantClient, _, _, err := auth.resolveTenantClient(envCtx, cmd)
+			if err != nil {
+				return err
+			}
+			collection := strings.TrimSpace(args[0])
+			if collection == "" {
+				return errors.New("collection name cannot be empty")
+			}
+
+			var body map[string]any
+			hasPayload := cmd.Flags().Lookup("data").Changed || cmd.Flags().Lookup("file").Changed || cmd.Flags().Lookup("stdin").Changed
+			if hasPayload {
+				payload, err := readJSONPayload(cmd, data, file, stdin, false)
+				if err != nil {
+					return err
+				}
+				if err := json.Unmarshal(payload, &body); err != nil {
+					return fmt.Errorf("invalid report query payload: %w", err)
+				}
+			}
+			if body == nil {
+				body = make(map[string]any)
+			}
+			body["collection"] = collection
+
+			params := clientpkg.ReportQueryParams{
+				AppID:      auth.appID,
+				Collection: collection,
+				Limit:      limit,
+				Offset:     offset,
+				Cursor:     strings.TrimSpace(cursor),
+				Body:       body,
+			}
+			if trimmed := strings.TrimSpace(selectFields); trimmed != "" {
+				params.SelectFields = splitCommaList(trimmed)
+			}
+			if limit > 0 {
+				if _, ok := body["limit"]; !ok {
+					body["limit"] = limit
+				}
+			}
+			if offset > 0 {
+				if _, ok := body["offset"]; !ok {
+					body["offset"] = offset
+				}
+			}
+			if params.Cursor != "" {
+				if _, ok := body["cursor"]; !ok {
+					body["cursor"] = params.Cursor
+				}
+			}
+			if len(params.SelectFields) > 0 {
+				if _, ok := body["select"]; !ok {
+					body["select"] = params.SelectFields
+				}
+			}
+
+			resp, err := tenantClient.ReportQuery(cmd.Context(), params)
+			if err != nil {
+				return err
+			}
+			if raw || rawPretty {
+				if rawPretty {
+					return printJSON(cmd, map[string]any{"data": resp.Data, "pagination": resp.Pagination})
+				}
+				return printJSON(cmd, resp)
+			}
+			result := &clientpkg.SavedQueryExecutionResult{Items: resp.Data}
+			if err := renderSavedQueryResult(cmd, result); err != nil {
+				return err
+			}
+			pagination := resp.Pagination
+			fmt.Fprintf(cmd.OutOrStdout(), "TOTAL: %d  LIMIT: %d  OFFSET: %d\n", pagination.Total, pagination.Limit, pagination.Offset)
+			if trimmed := strings.TrimSpace(pagination.NextCursor); trimmed != "" {
+				fmt.Fprintf(cmd.OutOrStdout(), "NEXT_CURSOR: %s\n", trimmed)
+			}
+			return nil
+		},
+	}
+
+	auth.bindWithApp(cmd)
+	cmd.Flags().StringVar(&data, "data", "", "Inline JSON report query payload")
+	cmd.Flags().StringVar(&file, "file", "", "Path to report query JSON payload")
+	cmd.Flags().BoolVar(&stdin, "stdin", false, "Read report query JSON payload from stdin")
+	cmd.Flags().IntVar(&limit, "limit", 0, "Override limit for the report query")
+	cmd.Flags().IntVar(&offset, "offset", 0, "Override offset for the report query")
+	cmd.Flags().StringVar(&cursor, "cursor", "", "Cursor token for paginated reports")
+	cmd.Flags().StringVar(&selectFields, "select", "", "Comma-separated list of fields to project")
+	cmd.Flags().BoolVar(&raw, "raw", false, "Print raw JSON response")
+	cmd.Flags().BoolVar(&rawPretty, "raw-pretty", false, "Print pretty JSON response")
+
 	return cmd
 }
 

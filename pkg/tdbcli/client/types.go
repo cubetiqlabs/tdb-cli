@@ -118,6 +118,20 @@ type DocumentBulkResponse struct {
 	Items []Document `json:"items"`
 }
 
+// ReportQueryResponse captures the payload returned by POST /api/query.
+type ReportQueryResponse struct {
+	Data       []map[string]any      `json:"data"`
+	Pagination ReportQueryPagination `json:"pagination"`
+}
+
+// ReportQueryPagination describes pagination metadata for report queries.
+type ReportQueryPagination struct {
+	Limit      int    `json:"limit"`
+	Offset     int    `json:"offset"`
+	Total      int64  `json:"total"`
+	NextCursor string `json:"next_cursor,omitempty"`
+}
+
 // SavedQuery represents the inner payload of a saved query document.
 type SavedQuery struct {
 	Name       string          `json:"name"`
@@ -162,6 +176,18 @@ type ListDocumentsParams struct {
 	IncludeDeleted bool
 	SelectFields   []string
 	Filters        map[string]string
+	Sort           []string
+}
+
+// ReportQueryParams configures report query requests.
+type ReportQueryParams struct {
+	AppID        string
+	Collection   string
+	Limit        int
+	Offset       int
+	Cursor       string
+	SelectFields []string
+	Body         map[string]any
 }
 
 // ListAuditLogsParams configures audit log retrieval.

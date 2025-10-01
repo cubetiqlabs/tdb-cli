@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -204,6 +205,9 @@ func (c *TenantClient) ListDocuments(ctx context.Context, collection string, par
 	}
 	if len(params.SelectFields) > 0 {
 		values.Set("select", strings.Join(params.SelectFields, ","))
+	}
+	if len(params.Sort) > 0 {
+		values.Set("sort", strings.Join(params.Sort, ","))
 	}
 	for field, value := range params.Filters {
 		if trimmed := strings.TrimSpace(field); trimmed != "" {
@@ -597,6 +601,82 @@ func (c *TenantClient) DeleteSavedQueryByName(ctx context.Context, name string, 
 		return err
 	}
 	return c.DeleteSavedQueryByID(ctx, doc.ID, purge, appID, confirm)
+}
+
+// ReportQuery executes the reporting endpoint for ad-hoc aggregations.
+func (c *TenantClient) ReportQuery(ctx context.Context, params ReportQueryParams) (*ReportQueryResponse, error) {
+	collection := strings.TrimSpace(params.Collection)
+	if collection == "" {
+		return nil, fmt.Errorf("collection is required")
+	}
+	payload := make(map[string]any)
+	if params.Body != nil {
+		for key, value := range params.Body {
+			if strings.EqualFold(key, "collection") {
+				continue
+			}
+			payload[key] = value
+		}
+	}
+	payload["collection"] = collection
+	if params.Limit > 0 {
+		if _, ok := payload["limit"]; !ok {
+			payload["limit"] = params.Limit
+		}
+	}
+	if params.Offset > 0 {
+		if _, ok := payload["offset"]; !ok {
+			payload["offset"] = params.Offset
+		}
+	}
+	if trimmed := strings.TrimSpace(params.Cursor); trimmed != "" {
+		if _, ok := payload["cursor"]; !ok {
+			payload["cursor"] = trimmed
+		}
+	}
+	if len(params.SelectFields) > 0 {
+		if _, ok := payload["select"]; !ok {
+			payload["select"] = params.SelectFields
+		}
+	}
+	encodedBody, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	values := url.Values{}
+	if trimmed := strings.TrimSpace(params.AppID); trimmed != "" {
+		values.Set("app_id", trimmed)
+	}
+	if params.Limit > 0 {
+		values.Set("limit", strconv.Itoa(params.Limit))
+	}
+	if params.Offset > 0 {
+		values.Set("offset", strconv.Itoa(params.Offset))
+	}
+	if trimmed := strings.TrimSpace(params.Cursor); trimmed != "" {
+		values.Set("cursor", trimmed)
+	}
+	if len(params.SelectFields) > 0 {
+		values.Set("select", strings.Join(params.SelectFields, ","))
+	}
+
+	path := "/api/query"
+	if encoded := values.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	req, err := c.newJSONRequest(ctx, http.MethodPost, path, jsonRaw(encodedBody))
+	if err != nil {
+		return nil, err
+	}
+	c.authorize(req)
+	c.applyAppScope(req, params.AppID)
+
+	var resp ReportQueryResponse
+	if err := c.do(req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
 
 // ListAuditLogs retrieves audit log entries for the tenant with optional filters.

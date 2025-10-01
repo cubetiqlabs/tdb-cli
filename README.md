@@ -11,6 +11,7 @@ TinyDB CLI is a standalone command-line interface for managing TinyDB tenants, c
 -   Collection & schema lifecycle commands
 -   Document CRUD and bulk operations
 -   Saved query lifecycle and execution helpers
+-   Report query execution for ad-hoc aggregations
 -   Audit log inspection with filtering and sorting
 -   Document version metadata for optimistic concurrency (timestamps + sequence headers)
 -   Real-time authentication check via `/api/me`
