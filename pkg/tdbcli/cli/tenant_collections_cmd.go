@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -17,6 +19,10 @@ import (
 func newTenantCollectionsListCommand(env *Environment) *cobra.Command {
 	var auth authFlags
 	var raw bool
+	var showSchema bool
+	var inspectDocs bool
+	var describe bool
+	var inspectLimit int
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List collections for a tenant",
@@ -57,12 +63,302 @@ func newTenantCollectionsListCommand(env *Environment) *cobra.Command {
 				})
 			}
 			renderTable(cmd, []string{"NAME", "APP", "PRIMARY KEY", "CREATED", "UPDATED", "DOCUMENTS", "STORAGE"}, rows)
+
+			inspect := inspectDocs || describe
+			displaySchema := showSchema || describe
+			if inspect || displaySchema {
+				limit := inspectLimit
+				if limit <= 0 {
+					limit = 10
+				}
+				if err := describeCollections(cmd, cmd.Context(), tenantClient, collections, auth.appID, displaySchema, inspect, limit); err != nil {
+					return err
+				}
+			}
 			return nil
 		},
 	}
 	auth.bindWithApp(cmd)
 	cmd.Flags().BoolVar(&raw, "raw", false, "Print raw JSON response")
+	cmd.Flags().BoolVar(&showSchema, "show-schema", false, "Print the stored JSON schema for each collection")
+	cmd.Flags().BoolVar(&inspectDocs, "inspect-docs", false, "Inspect representative documents to infer field types")
+	cmd.Flags().IntVar(&inspectLimit, "inspect-limit", 10, "Maximum documents to inspect when --inspect-docs is enabled")
+	cmd.Flags().BoolVar(&describe, "describe", false, "Convenience flag enabling both --show-schema and --inspect-docs")
 	return cmd
+}
+
+func describeCollections(cmd *cobra.Command, ctx context.Context, tenantClient *clientpkg.TenantClient, collections []clientpkg.Collection, appID string, showSchema, inspectDocs bool, sampleLimit int) error {
+	if tenantClient == nil {
+		return errors.New("tenant client is required")
+	}
+	out := cmd.OutOrStdout()
+	trimmedAppID := strings.TrimSpace(appID)
+	var flagMissing bool
+	for idx, col := range collections {
+		if idx == 0 {
+			fmt.Fprintln(out)
+		}
+		fmt.Fprintf(out, "Collection: %s\n", col.Name)
+		app := "-"
+		if col.AppID != nil && strings.TrimSpace(*col.AppID) != "" {
+			app = *col.AppID
+		}
+		fmt.Fprintf(out, "  App: %s\n", app)
+		fmt.Fprintf(out, "  Documents: %d\n", col.DocumentCount)
+		fmt.Fprintf(out, "  Storage: %s\n", formatBytes(col.StorageBytes))
+
+		var schemaFields map[string]struct{}
+		if showSchema {
+			if err := printCollectionSchema(cmd, col.SchemaJSON); err != nil {
+				return fmt.Errorf("collection %s schema: %w", col.Name, err)
+			}
+			schemaFields = extractSchemaProperties(col.SchemaJSON)
+		} else if inspectDocs {
+			schemaFields = extractSchemaProperties(col.SchemaJSON)
+		}
+
+		if inspectDocs {
+			summary, err := inferDocumentFieldTypes(ctx, tenantClient, col.Name, trimmedAppID, sampleLimit)
+			if err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "  Failed to inspect documents: %v\n", err)
+			} else {
+				if marked := printInferredDocumentSummary(cmd, summary, sampleLimit, len(schemaFields) > 0, schemaFields); marked {
+					flagMissing = true
+				}
+			}
+		}
+
+		if idx < len(collections)-1 {
+			fmt.Fprintln(out)
+		}
+	}
+	if flagMissing {
+		fmt.Fprintln(out, "\n* Fields marked with * were not declared in the stored schema.")
+	}
+	return nil
+}
+
+func printCollectionSchema(cmd *cobra.Command, schemaJSON string) error {
+	out := cmd.OutOrStdout()
+	fmt.Fprintln(out, "  Schema:")
+	trimmed := strings.TrimSpace(schemaJSON)
+	if trimmed == "" {
+		fmt.Fprintln(out, "    (none declared)")
+		return nil
+	}
+	decoder := json.NewDecoder(strings.NewReader(trimmed))
+	decoder.UseNumber()
+	var decoded any
+	if err := decoder.Decode(&decoded); err != nil {
+		fmt.Fprintf(out, "    (invalid JSON: %v)\n", err)
+		fmt.Fprintf(out, "    %s\n", trimmed)
+		return nil
+	}
+	formatted, err := json.MarshalIndent(decoded, "    ", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(out, string(formatted))
+	return nil
+}
+
+func printInferredDocumentSummary(cmd *cobra.Command, summary map[string][]string, sampleLimit int, hasSchema bool, schemaFields map[string]struct{}) bool {
+	out := cmd.OutOrStdout()
+	if len(summary) == 0 {
+		fmt.Fprintln(out, "  Inferred fields: (no documents inspected)")
+		return false
+	}
+	fmt.Fprintf(out, "  Inferred fields (sample of up to %d documents):\n", sampleLimit)
+	keys := make([]string, 0, len(summary))
+	for field := range summary {
+		if field == "" {
+			continue
+		}
+		keys = append(keys, field)
+	}
+	sort.Strings(keys)
+	var flagged bool
+	for _, field := range keys {
+		types := append([]string(nil), summary[field]...)
+		sort.Strings(types)
+		marker := ""
+		if hasSchema {
+			if _, ok := schemaFields[field]; !ok {
+				marker = " *"
+				flagged = true
+			}
+		}
+		fmt.Fprintf(out, "    - %s: %s%s\n", field, strings.Join(types, ", "), marker)
+	}
+	return flagged
+}
+
+func inferDocumentFieldTypes(ctx context.Context, tenantClient *clientpkg.TenantClient, collection, appID string, limit int) (map[string][]string, error) {
+	if tenantClient == nil {
+		return nil, errors.New("tenant client is required")
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+	params := clientpkg.ListDocumentsParams{
+		AppID: strings.TrimSpace(appID),
+		Limit: limit,
+	}
+	resp, err := tenantClient.ListDocuments(ctx, collection, params)
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string][]string)
+	if resp == nil {
+		return result, nil
+	}
+	summary := make(map[string]map[string]struct{})
+	for _, item := range resp.Items {
+		if strings.TrimSpace(item.Data) == "" {
+			continue
+		}
+		decoder := json.NewDecoder(strings.NewReader(item.Data))
+		decoder.UseNumber()
+		var payload any
+		if err := decoder.Decode(&payload); err != nil {
+			continue
+		}
+		collectDocumentFieldTypes(summary, payload, "")
+	}
+	for field, types := range summary {
+		if field == "" {
+			continue
+		}
+		typeList := make([]string, 0, len(types))
+		for typ := range types {
+			typeList = append(typeList, typ)
+		}
+		sort.Strings(typeList)
+		result[field] = typeList
+	}
+	return result, nil
+}
+
+func collectDocumentFieldTypes(summary map[string]map[string]struct{}, value any, path string) {
+	switch v := value.(type) {
+	case map[string]any:
+		if path != "" {
+			addFieldType(summary, path, "object")
+		}
+		for key, child := range v {
+			next := key
+			if path != "" {
+				next = path + "." + key
+			}
+			collectDocumentFieldTypes(summary, child, next)
+		}
+	case []any:
+		if path != "" {
+			addFieldType(summary, path, "array")
+			elementPath := path + "[]"
+			for _, child := range v {
+				collectDocumentFieldTypes(summary, child, elementPath)
+			}
+		} else {
+			for _, child := range v {
+				collectDocumentFieldTypes(summary, child, path)
+			}
+		}
+	case json.Number:
+		addNumericFieldType(summary, path, v)
+	case float64:
+		addFloatFieldType(summary, path, v)
+	case bool:
+		addFieldType(summary, path, "boolean")
+	case string:
+		addFieldType(summary, path, "string")
+	case nil:
+		addFieldType(summary, path, "null")
+	default:
+		addFieldType(summary, path, fmt.Sprintf("%T", v))
+	}
+}
+
+func addFieldType(summary map[string]map[string]struct{}, path, typ string) {
+	if path == "" || typ == "" {
+		return
+	}
+	set, ok := summary[path]
+	if !ok {
+		set = make(map[string]struct{})
+		summary[path] = set
+	}
+	set[typ] = struct{}{}
+}
+
+func addNumericFieldType(summary map[string]map[string]struct{}, path string, number json.Number) {
+	if path == "" {
+		return
+	}
+	if _, err := number.Int64(); err == nil && !strings.Contains(number.String(), ".") {
+		addFieldType(summary, path, "integer")
+		return
+	}
+	addFieldType(summary, path, "number")
+}
+
+func addFloatFieldType(summary map[string]map[string]struct{}, path string, value float64) {
+	if path == "" {
+		return
+	}
+	if math.Trunc(value) == value {
+		addFieldType(summary, path, "integer")
+	} else {
+		addFieldType(summary, path, "number")
+	}
+}
+
+func extractSchemaProperties(schemaJSON string) map[string]struct{} {
+	trimmed := strings.TrimSpace(schemaJSON)
+	if trimmed == "" {
+		return nil
+	}
+	var decoded any
+	if err := json.Unmarshal([]byte(trimmed), &decoded); err != nil {
+		return nil
+	}
+	fields := make(map[string]struct{})
+	collectSchemaProperties(decoded, "", fields)
+	return fields
+}
+
+func collectSchemaProperties(node any, path string, fields map[string]struct{}) {
+	obj, ok := node.(map[string]any)
+	if !ok {
+		return
+	}
+	if path != "" {
+		fields[path] = struct{}{}
+	}
+	if props, ok := obj["properties"].(map[string]any); ok {
+		for key, child := range props {
+			next := key
+			if path != "" {
+				next = path + "." + key
+			}
+			collectSchemaProperties(child, next, fields)
+		}
+	}
+	if items, ok := obj["items"]; ok {
+		arrayPath := "[]"
+		if path != "" {
+			arrayPath = path + "[]"
+		}
+		fields[arrayPath] = struct{}{}
+		collectSchemaProperties(items, arrayPath, fields)
+	}
+	for _, key := range []string{"anyOf", "oneOf", "allOf"} {
+		if variants, ok := obj[key].([]any); ok {
+			for _, variant := range variants {
+				collectSchemaProperties(variant, path, fields)
+			}
+		}
+	}
 }
 
 func newTenantCollectionsCountCommand(env *Environment) *cobra.Command {

@@ -15,6 +15,11 @@ type Tenant struct {
 	RateLimitPerMinute *int      `json:"rate_limit_per_minute"`
 	RequestDailyLimit  *int      `json:"request_daily_limit"`
 	StorageBytesLimit  *int64    `json:"storage_bytes_limit"`
+	DocumentCount      int64     `json:"document_count"`
+	StorageBytes       int64     `json:"storage_bytes"`
+	AppCount           int64     `json:"app_count"`
+	CollectionCount    int64     `json:"collection_count"`
+	APIKeyCount        int64     `json:"api_key_count"`
 }
 
 // APIKey mirrors the admin API key response.
@@ -211,13 +216,15 @@ type ListAuditLogsParams struct {
 
 // Application represents the application resource exposed via tenant API.
 type Application struct {
-	ID          string     `json:"id"`
-	TenantID    string     `json:"tenant_id"`
-	Name        string     `json:"name"`
-	Description string     `json:"description"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-	DeletedAt   *time.Time `json:"deleted_at"`
+	ID            string     `json:"id"`
+	TenantID      string     `json:"tenant_id"`
+	Name          string     `json:"name"`
+	Description   string     `json:"description"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	DeletedAt     *time.Time `json:"deleted_at"`
+	DocumentCount int64      `json:"document_count"`
+	StorageBytes  int64      `json:"storage_bytes"`
 }
 
 // CreateTenantRequest is used when provisioning a new tenant.

@@ -56,6 +56,25 @@ tdb --help
 
 See `tdb <command> --help` for details on each command. Configuration is stored under `~/.config/tdb/config.yaml` by default.
 
+### Collection inspection
+
+Use `tdb tenant collections list` with the new inspection flags to understand stored schemas and document shapes:
+
+-   `--show-schema` prints the persisted JSON schema for each collection after the tabular summary.
+-   `--inspect-docs` samples up to `--inspect-limit` documents (default 10) and infers field types, highlighting gaps versus the stored schema.
+-   `--describe` is a shortcut that enables both of the above flags.
+
+Example:
+
+```bash
+tdb tenant collections list \
+    --describe \
+    --tenant TENANT_ID \
+    --app app_123
+```
+
+Fields marked with `*` are present in sampled documents but missing from the stored schema—handy for spotting drift or undocumented fields.
+
 ### Audit logs
 
 List the most recent audit entries for a tenant, optionally filtering by collection, document, actor, or time window:

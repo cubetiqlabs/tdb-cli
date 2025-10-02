@@ -153,9 +153,16 @@ func newTenantAppsListCommand(env *Environment) *cobra.Command {
 			}
 			rows := make([][]string, 0, len(apps))
 			for _, app := range apps {
-				rows = append(rows, []string{app.ID, app.Name, app.Description, formatTime(app.CreatedAt)})
+				rows = append(rows, []string{
+					app.ID,
+					app.Name,
+					fmt.Sprintf("%d", app.DocumentCount),
+					formatBytes(app.StorageBytes),
+					app.Description,
+					formatTime(app.CreatedAt),
+				})
 			}
-			renderTable(cmd, []string{"ID", "NAME", "DESCRIPTION", "CREATED"}, rows)
+			renderTable(cmd, []string{"ID", "NAME", "DOCS", "STORAGE", "DESCRIPTION", "CREATED"}, rows)
 			return nil
 		},
 	}
@@ -258,8 +265,14 @@ func newTenantAppsGetCommand(env *Environment) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "ID: %s\nNAME: %s\nDESCRIPTION: %s\nCREATED: %s\nUPDATED: %s\n",
-				app.ID, app.Name, app.Description, formatTime(app.CreatedAt), formatTime(app.UpdatedAt))
+			fmt.Fprintf(cmd.OutOrStdout(), "ID: %s\nNAME: %s\nDESCRIPTION: %s\nDOCUMENTS: %d\nSTORAGE: %s\nCREATED: %s\nUPDATED: %s\n",
+				app.ID,
+				app.Name,
+				app.Description,
+				app.DocumentCount,
+				formatBytes(app.StorageBytes),
+				formatTime(app.CreatedAt),
+				formatTime(app.UpdatedAt))
 			return nil
 		},
 	}

@@ -60,13 +60,23 @@ func newAdminTenantListCommand(env *Environment) *cobra.Command {
 			}
 			rows := make([][]string, 0, len(tenants))
 			for _, t := range tenants {
-				rows = append(rows, []string{t.ID, t.Name, t.Description, formatTime(t.CreatedAt)})
+				rows = append(rows, []string{
+					t.ID,
+					t.Name,
+					humanize.Comma(t.AppCount),
+					humanize.Comma(t.CollectionCount),
+					humanize.Comma(t.DocumentCount),
+					humanize.Comma(t.APIKeyCount),
+					formatBytes(t.StorageBytes),
+					t.Description,
+					formatTime(t.CreatedAt),
+				})
 			}
 			if len(rows) == 0 {
 				fmt.Fprintln(cmd.OutOrStdout(), "No tenants found")
 				return nil
 			}
-			renderTable(cmd, []string{"ID", "NAME", "DESCRIPTION", "CREATED"}, rows)
+			renderTable(cmd, []string{"ID", "NAME", "APPS", "COLLECTIONS", "DOCUMENTS", "API KEYS", "STORAGE", "DESCRIPTION", "CREATED"}, rows)
 			return nil
 		},
 	}
