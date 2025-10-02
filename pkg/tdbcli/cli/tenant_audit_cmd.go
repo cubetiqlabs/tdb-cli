@@ -154,10 +154,11 @@ func newTenantAuditCommand(env *Environment) *cobra.Command {
 					docLabel,
 					strings.ToUpper(entry.Operation),
 					actor,
+					formatBytes(entry.ChangeSize),
 					summarizeAuditChange(entry.OldData, entry.NewData),
 				})
 			}
-			renderTable(cmd, []string{"WHEN", "COLLECTION", "DOCUMENT", "OPERATION", "ACTOR", "CHANGE"}, rows)
+			renderTable(cmd, []string{"WHEN", "COLLECTION", "DOCUMENT", "OPERATION", "ACTOR", "SIZE", "CHANGE"}, rows)
 			return nil
 		},
 	}

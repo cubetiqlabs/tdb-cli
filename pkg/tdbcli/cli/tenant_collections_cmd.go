@@ -52,9 +52,11 @@ func newTenantCollectionsListCommand(env *Environment) *cobra.Command {
 					summarizePrimaryKey(col.PrimaryKeyField, col.PrimaryKeyType, col.PrimaryKeyAuto),
 					formatTime(col.CreatedAt),
 					formatTime(col.UpdatedAt),
+					fmt.Sprintf("%d", col.DocumentCount),
+					formatBytes(col.StorageBytes),
 				})
 			}
-			renderTable(cmd, []string{"NAME", "APP", "PRIMARY KEY", "CREATED", "UPDATED"}, rows)
+			renderTable(cmd, []string{"NAME", "APP", "PRIMARY KEY", "CREATED", "UPDATED", "DOCUMENTS", "STORAGE"}, rows)
 			return nil
 		},
 	}

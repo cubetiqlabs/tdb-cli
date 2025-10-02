@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
 
 	clientpkg "github.com/cubetiqlabs/tdb-cli/pkg/tdbcli/client"
@@ -246,16 +247,20 @@ func makeAuditLogsPretty(items []clientpkg.AuditLog) []map[string]any {
 	result := make([]map[string]any, 0, len(items))
 	for _, entry := range items {
 		row := map[string]any{
-			"id":               entry.ID,
-			"tenant_id":        entry.TenantID,
-			"collection_id":    entry.CollectionID,
-			"document_id":      entry.DocumentID,
-			"document_version": entry.DocumentVersion,
-			"operation":        entry.Operation,
-			"actor":            entry.Actor,
-			"created_at":       entry.CreatedAt,
-			"old_data":         coerceJSONValue(entry.OldData),
-			"new_data":         coerceJSONValue(entry.NewData),
+			"id":                entry.ID,
+			"tenant_id":         entry.TenantID,
+			"collection_id":     entry.CollectionID,
+			"document_id":       entry.DocumentID,
+			"document_version":  entry.DocumentVersion,
+			"operation":         entry.Operation,
+			"actor":             entry.Actor,
+			"created_at":        entry.CreatedAt,
+			"old_data":          coerceJSONValue(entry.OldData),
+			"new_data":          coerceJSONValue(entry.NewData),
+			"old_data_size":     entry.OldDataSize,
+			"new_data_size":     entry.NewDataSize,
+			"change_size":       entry.ChangeSize,
+			"change_size_human": formatBytes(entry.ChangeSize),
 		}
 		result = append(result, row)
 	}
@@ -264,16 +269,18 @@ func makeAuditLogsPretty(items []clientpkg.AuditLog) []map[string]any {
 
 func makeDocumentPretty(doc clientpkg.Document) map[string]any {
 	row := map[string]any{
-		"id":            doc.ID,
-		"tenant_id":     doc.TenantID,
-		"collection_id": doc.CollectionID,
-		"key":           doc.Key,
-		"key_numeric":   doc.KeyNumeric,
-		"version":       doc.Version,
-		"created_at":    doc.CreatedAt,
-		"updated_at":    doc.UpdatedAt,
-		"deleted_at":    doc.DeletedAt,
-		"data":          coerceJSONValue(doc.Data),
+		"id":              doc.ID,
+		"tenant_id":       doc.TenantID,
+		"collection_id":   doc.CollectionID,
+		"key":             doc.Key,
+		"key_numeric":     doc.KeyNumeric,
+		"version":         doc.Version,
+		"created_at":      doc.CreatedAt,
+		"updated_at":      doc.UpdatedAt,
+		"deleted_at":      doc.DeletedAt,
+		"data":            coerceJSONValue(doc.Data),
+		"data_size":       doc.DataSize,
+		"data_size_human": formatBytes(doc.DataSize),
 	}
 	return row
 }
@@ -385,4 +392,11 @@ func summarizeJSON(raw string, max int) string {
 		return string(runes[:max])
 	}
 	return string(runes[:max-3]) + "..."
+}
+
+func formatBytes(value int64) string {
+	if value <= 0 {
+		return "0 B"
+	}
+	return humanize.Bytes(uint64(value))
 }

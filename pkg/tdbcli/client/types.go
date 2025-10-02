@@ -43,6 +43,8 @@ type Collection struct {
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 	DeletedAt       *time.Time `json:"deleted_at"`
+	DocumentCount   int64      `json:"document_count"`
+	StorageBytes    int64      `json:"storage_bytes"`
 }
 
 // PrimaryKeySpec configures a collection primary key.
@@ -79,6 +81,7 @@ type Document struct {
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 	DeletedAt    *time.Time `json:"deleted_at"`
+	DataSize     int64      `json:"data_size"`
 }
 
 // AuditLog captures history entries for document lifecycle events.
@@ -93,6 +96,9 @@ type AuditLog struct {
 	OldData         string    `json:"old_data"`
 	NewData         string    `json:"new_data"`
 	CreatedAt       time.Time `json:"created_at"`
+	OldDataSize     int64     `json:"old_data_size"`
+	NewDataSize     int64     `json:"new_data_size"`
+	ChangeSize      int64     `json:"change_size"`
 }
 
 // DocumentPagination exposes pagination metadata for list endpoints.

@@ -102,10 +102,11 @@ func newTenantDocumentsListCommand(env *Environment) *cobra.Command {
 					formatRelativeTime(doc.CreatedAt, "-"),
 					formatRelativeTime(doc.UpdatedAt, "-"),
 					deleted,
+					formatBytes(doc.DataSize),
 					summarizeJSON(doc.Data, 60),
 				})
 			}
-			renderTable(cmd, []string{"ID", "KEY", "CREATED", "UPDATED", "DELETED", "DATA"}, rows)
+			renderTable(cmd, []string{"ID", "KEY", "CREATED", "UPDATED", "DELETED", "SIZE", "DATA"}, rows)
 			return nil
 		},
 	}
