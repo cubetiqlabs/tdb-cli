@@ -787,3 +787,95 @@ func (c *TenantClient) GetApplication(ctx context.Context, id string) (*Applicat
 	}
 	return &app, nil
 }
+
+// ===== SNAPSHOT OPERATIONS =====
+
+// ListSnapshots retrieves snapshots for the tenant
+func (c *TenantClient) ListSnapshots(ctx context.Context, collectionID string, limit, offset int) ([]Snapshot, error) {
+	query := url.Values{}
+	if collectionID != "" {
+		query.Set("collection_id", collectionID)
+	}
+	if limit > 0 {
+		query.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		query.Set("offset", strconv.Itoa(offset))
+	}
+
+	path := "/api/snapshots"
+	if len(query) > 0 {
+		path += "?" + query.Encode()
+	}
+
+	req, err := c.newJSONRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.authorize(req)
+
+	var resp SnapshotListResponse
+	if err := c.do(req, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Items, nil
+}
+
+// GetSnapshot retrieves a single snapshot by ID
+func (c *TenantClient) GetSnapshot(ctx context.Context, snapshotID string) (*Snapshot, error) {
+	path := fmt.Sprintf("/api/snapshots/%s", url.PathEscape(snapshotID))
+	req, err := c.newJSONRequest(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return nil, err
+	}
+	c.authorize(req)
+
+	var snapshot Snapshot
+	if err := c.do(req, &snapshot); err != nil {
+		return nil, err
+	}
+	return &snapshot, nil
+}
+
+// CreateSnapshot creates a new snapshot
+func (c *TenantClient) CreateSnapshot(ctx context.Context, request CreateSnapshotRequest) (*Snapshot, error) {
+	req, err := c.newJSONRequest(ctx, http.MethodPost, "/api/snapshots", request)
+	if err != nil {
+		return nil, err
+	}
+	c.authorize(req)
+
+	var snapshot Snapshot
+	if err := c.do(req, &snapshot); err != nil {
+		return nil, err
+	}
+	return &snapshot, nil
+}
+
+// RestoreSnapshot restores a snapshot
+func (c *TenantClient) RestoreSnapshot(ctx context.Context, snapshotID string, request RestoreSnapshotRequest) (*RestoreSnapshotResponse, error) {
+	path := fmt.Sprintf("/api/snapshots/%s/restore", url.PathEscape(snapshotID))
+	req, err := c.newJSONRequest(ctx, http.MethodPost, path, request)
+	if err != nil {
+		return nil, err
+	}
+	c.authorize(req)
+
+	var resp RestoreSnapshotResponse
+	if err := c.do(req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
+}
+
+// DeleteSnapshot deletes a snapshot
+func (c *TenantClient) DeleteSnapshot(ctx context.Context, snapshotID string) error {
+	path := fmt.Sprintf("/api/snapshots/%s", url.PathEscape(snapshotID))
+	req, err := c.newJSONRequest(ctx, http.MethodDelete, path, nil)
+	if err != nil {
+		return err
+	}
+	c.authorize(req)
+
+	return c.do(req, nil)
+}

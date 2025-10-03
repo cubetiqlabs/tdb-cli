@@ -78,6 +78,9 @@ func registerTenantCommands(root *cobra.Command, env *Environment) {
 	authCmd := newTenantAuthCommand(env)
 	tenantCmd.AddCommand(authCmd)
 
+	snapshotsCmd := newTenantSnapshotsCommand(env)
+	tenantCmd.AddCommand(snapshotsCmd)
+
 	root.AddCommand(tenantCmd)
 }
 

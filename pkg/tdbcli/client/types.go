@@ -271,3 +271,53 @@ type CreateApplicationResponse struct {
 	Prefix string       `json:"prefix"`
 	Error  string       `json:"error,omitempty"`
 }
+
+// Snapshot represents a collection snapshot (backup)
+type Snapshot struct {
+	ID               string     `json:"id"`
+	TenantID         string     `json:"tenant_id"`
+	CollectionID     string     `json:"collection_id"`
+	CollectionName   string     `json:"collection_name"`
+	Name             string     `json:"name"`
+	Description      string     `json:"description"`
+	DocumentCount    int        `json:"document_count"`
+	SizeBytes        int64      `json:"size_bytes"`
+	Compressed       bool       `json:"compressed"`
+	StorageProvider  string     `json:"storage_provider"`
+	StoragePath      string     `json:"storage_path"`
+	Encrypted        bool       `json:"encrypted"`
+	EncryptionKeyID  string     `json:"encryption_key_id"`
+	SnapshotType     string     `json:"snapshot_type"`
+	ParentSnapshotID string     `json:"parent_snapshot_id"`
+	CreatedBy        string     `json:"created_by"`
+	CreatedAt        time.Time  `json:"created_at"`
+	ExpiresAt        *time.Time `json:"expires_at"`
+}
+
+// CreateSnapshotRequest is the payload for creating a snapshot
+type CreateSnapshotRequest struct {
+	CollectionID     string `json:"collection_id"`
+	Name             string `json:"name"`
+	Description      string `json:"description,omitempty"`
+	Incremental      bool   `json:"incremental,omitempty"`
+	ParentSnapshotID string `json:"parent_snapshot_id,omitempty"`
+	Encrypt          bool   `json:"encrypt,omitempty"`
+	StorageProvider  string `json:"storage_provider,omitempty"`
+}
+
+// RestoreSnapshotRequest is the payload for restoring a snapshot
+type RestoreSnapshotRequest struct {
+	TargetCollectionID string `json:"target_collection_id,omitempty"`
+}
+
+// RestoreSnapshotResponse is the response from restoring a snapshot
+type RestoreSnapshotResponse struct {
+	CollectionID      string `json:"collection_id"`
+	DocumentsRestored int    `json:"documents_restored"`
+}
+
+// SnapshotListResponse wraps snapshot list responses
+type SnapshotListResponse struct {
+	Items      []Snapshot         `json:"items"`
+	Pagination DocumentPagination `json:"pagination"`
+}

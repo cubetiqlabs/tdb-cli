@@ -13,6 +13,7 @@ TinyDB CLI is a standalone command-line interface for managing TinyDB tenants, c
 -   Saved query lifecycle and execution helpers
 -   Report query execution for ad-hoc aggregations
 -   Audit log inspection with filtering and sorting
+-   Snapshot management for backup and restore operations
 -   Document version metadata for optimistic concurrency (timestamps + sequence headers)
 -   Real-time authentication check via `/api/me`
 -   Offline export helpers and install scripts
@@ -84,6 +85,62 @@ tdb tenant audit --collection users --since 48h --sort created_at --raw-pretty
 ```
 
 Relative durations (`1h`, `2d`, etc.) are resolved against the current time; fallback to RFC3339 timestamps for absolute ranges. Use `--raw` for compact JSON and `--raw-pretty` for pretty-printed output.
+
+### Snapshots
+
+Create, restore, list, and delete collection snapshots for backup and disaster recovery:
+
+```bash
+# List all snapshots
+tdb tenant snapshots list --api-key $API_KEY
+
+# List snapshots for a specific collection
+tdb tenant snapshots list --api-key $API_KEY --collection users
+
+# Create a full snapshot
+tdb tenant snapshots create \
+    --api-key $API_KEY \
+    --collection users \
+    --name "Daily backup"
+
+# Create an encrypted snapshot with S3 storage
+tdb tenant snapshots create \
+    --api-key $API_KEY \
+    --collection orders \
+    --name "Production backup" \
+    --encrypt \
+    --storage s3
+
+# Create an incremental snapshot
+tdb tenant snapshots create \
+    --api-key $API_KEY \
+    --collection users \
+    --name "Incremental" \
+    --incremental \
+    --parent-snapshot snap-parent-123
+
+# Get snapshot details
+tdb tenant snapshots get --api-key $API_KEY --snapshot snap-123
+
+# Restore to original collection
+tdb tenant snapshots restore \
+    --api-key $API_KEY \
+    --snapshot snap-123
+
+# Restore to a different collection
+tdb tenant snapshots restore \
+    --api-key $API_KEY \
+    --snapshot snap-123 \
+    --target-collection users-restored
+
+# Delete a snapshot
+tdb tenant snapshots delete \
+    --api-key $API_KEY \
+    --snapshot snap-123 \
+    --force
+```
+
+Snapshots support both full and incremental backups, optional encryption at rest, and multiple storage providers (local, S3, GCS). Use aliases like `backup` or `snapshot` for convenience.
 
 ## Syncing existing data
 
