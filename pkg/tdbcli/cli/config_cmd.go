@@ -31,6 +31,12 @@ func newConfigShowCommand(env *Environment) *cobra.Command {
 	return &cobra.Command{
 		Use:   "show",
 		Short: "Print the current CLI config as YAML",
+		Long:  `Display the current TinyDB CLI configuration including endpoint, stored API keys, and tenant settings. Admin secrets are masked for security.`,
+		Example: `  # Show current configuration
+  tdb config show
+
+  # Redirect to file
+  tdb config show > config-backup.yaml`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			env, err := requireEnvironment(env)
 			if err != nil {
@@ -60,7 +66,34 @@ func newConfigStoreKeyCommand(env *Environment) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "store-key <tenant_id> <alias>",
 		Short: "Persist an API key in the local config",
-		Args:  cobra.ExactArgs(2),
+		Long: `Store an API key in the local CLI configuration for convenient reuse.
+
+Stored keys can be referenced by alias instead of passing the full key value with each command. Keys are stored securely in the local config file.
+
+You can optionally mark a key as default for a tenant and associate it with a specific application scope.`,
+		Example: `  # Store an API key
+  tdb config store-key tenant_123 my-key \
+    --key "tdb_abc123..." \
+    --description "Production API key"
+
+  # Store and set as default
+  tdb config store-key tenant_123 default-key \
+    --key "tdb_xyz789..." \
+    --set-default \
+    --tenant-name "Production"
+
+  # Store key from stdin
+  echo "tdb_secret..." | tdb config store-key tenant_456 stdin-key --stdin
+
+  # Store app-scoped key
+  tdb config store-key tenant_789 app-key \
+    --key "tdb_app..." \
+    --app-id app_123 \
+    --description "App-specific key"
+
+  # Usage after storing:
+  tdb tenant collections list --key my-key`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			env, err := requireEnvironment(env)
 			if err != nil {

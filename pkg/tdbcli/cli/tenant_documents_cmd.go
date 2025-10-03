@@ -33,7 +33,46 @@ func newTenantDocumentsListCommand(env *Environment) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list <collection>",
 		Short: "List documents in a collection",
-		Args:  cobra.ExactArgs(1),
+		Long: `List documents from a collection with support for filtering, sorting, pagination, and field selection.
+
+Supports both offset-based and cursor-based pagination. Use --cursor for efficient pagination of large result sets.
+
+Filters use simple key=value syntax and support dotted paths for nested fields.`,
+		Example: `  # List all documents
+  tdb tenant documents list users --api-key $API_KEY
+
+  # List with limit and offset
+  tdb tenant documents list products --limit 20 --offset 40 --api-key $API_KEY
+
+  # List with cursor-based pagination
+  tdb tenant documents list orders --limit 50 --cursor eyJpZCI6... --api-key $API_KEY
+
+  # Filter documents
+  tdb tenant documents list users \
+    --filter status=active \
+    --filter role=admin \
+    --api-key $API_KEY
+
+  # Sort documents (field:asc or field:desc)
+  tdb tenant documents list products \
+    --sort price:asc \
+    --sort created_at:desc \
+    --api-key $API_KEY
+
+  # Select specific fields
+  tdb tenant documents list users \
+    --select email,name,created_at \
+    --api-key $API_KEY
+
+  # Include soft-deleted documents
+  tdb tenant documents list orders --include-deleted --api-key $API_KEY
+
+  # Pretty-print JSON output
+  tdb tenant documents list users --raw-pretty --api-key $API_KEY
+
+  # For a specific application
+  tdb tenant documents list logs --app app_123 --api-key $API_KEY`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
 			if err != nil {
@@ -132,7 +171,19 @@ func newTenantDocumentsGetCommand(env *Environment) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get <collection> <id>",
 		Short: "Fetch a document by ID",
-		Args:  cobra.ExactArgs(2),
+		Long:  `Retrieve a single document by its ID or primary key value.`,
+		Example: `  # Get document by ID
+  tdb tenant documents get users user_123 --api-key $API_KEY
+
+  # Get document by primary key
+  tdb tenant documents get products SKU-789 --api-key $API_KEY
+
+  # Get with pretty-printed JSON
+  tdb tenant documents get orders order_456 --raw-pretty --api-key $API_KEY
+
+  # Get from a specific app
+  tdb tenant documents get logs log_001 --app app_123 --api-key $API_KEY`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
 			if err != nil {
@@ -187,8 +238,35 @@ func newTenantDocumentsCreateCommand(env *Environment) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "create <collection>",
-		Short: "Create a document",
-		Args:  cobra.ExactArgs(1),
+		Short: "Create a new document",
+		Long: `Create a new document in a collection from JSON data.
+
+The document data can be provided inline via --data, from a file via --file, or from stdin via --stdin.
+
+If the collection has a primary key configured with auto-generation, the ID will be generated automatically. Otherwise, you must include the primary key field in the document data.`,
+		Example: `  # Create from inline JSON
+  tdb tenant documents create users \
+    --data '{"email":"user@example.com","name":"John Doe"}' \
+    --api-key $API_KEY
+
+  # Create from file
+  tdb tenant documents create products --file product.json --api-key $API_KEY
+
+  # Create from stdin
+  echo '{"title":"New Post","content":"..."}' | \
+    tdb tenant documents create posts --stdin --api-key $API_KEY
+
+  # Create with auto-generated ID
+  tdb tenant documents create events \
+    --data '{"type":"click","timestamp":"2025-01-15T10:30:00Z"}' \
+    --api-key $API_KEY
+
+  # Create for a specific app
+  tdb tenant documents create logs \
+    --data '{"level":"info","message":"Server started"}' \
+    --app app_123 \
+    --api-key $API_KEY`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
 			if err != nil {
@@ -242,7 +320,26 @@ func newTenantDocumentsUpdateCommand(env *Environment) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update <collection> <id>",
 		Short: "Replace a document",
-		Args:  cobra.ExactArgs(2),
+		Long: `Completely replace a document with new data.
+
+This performs a full replacement - all existing fields will be replaced with the new document data. Use the 'patch' command instead if you want to partially update specific fields.`,
+		Example: `  # Update document with inline JSON
+  tdb tenant documents update users user_123 \
+    --data '{"email":"newemail@example.com","name":"Jane Doe","role":"admin"}' \
+    --api-key $API_KEY
+
+  # Update from file
+  tdb tenant documents update products prod_456 --file product-update.json --api-key $API_KEY
+
+  # Update from stdin
+  cat user-data.json | tdb tenant documents update users user_789 --stdin --api-key $API_KEY
+
+  # Update for a specific app
+  tdb tenant documents update configs cfg_001 \
+    --data '{"theme":"dark","language":"en"}' \
+    --app app_123 \
+    --api-key $API_KEY`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
 			if err != nil {
@@ -297,7 +394,33 @@ func newTenantDocumentsPatchCommand(env *Environment) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "patch <collection> <id>",
 		Short: "Patch a document",
-		Args:  cobra.ExactArgs(2),
+		Long: `Partially update a document by merging the provided changes with the existing document.
+
+This performs a JSON merge patch operation - only the fields you specify will be updated, and existing fields not mentioned in the patch will remain unchanged. To remove a field, set its value to null.`,
+		Example: `  # Patch specific fields
+  tdb tenant documents patch users user_123 \
+    --data '{"status":"active","last_login":"2025-01-15T10:00:00Z"}' \
+    --api-key $API_KEY
+
+  # Remove a field by setting it to null
+  tdb tenant documents patch users user_456 \
+    --data '{"temp_field":null}' \
+    --api-key $API_KEY
+
+  # Patch from file
+  tdb tenant documents patch products prod_789 --file changes.json --api-key $API_KEY
+
+  # Patch nested fields
+  tdb tenant documents patch users user_001 \
+    --data '{"preferences":{"theme":"dark","notifications":true}}' \
+    --api-key $API_KEY
+
+  # Patch for a specific app
+  tdb tenant documents patch settings cfg_001 \
+    --data '{"enabled":true}' \
+    --app app_123 \
+    --api-key $API_KEY`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
 			if err != nil {
@@ -349,7 +472,23 @@ func newTenantDocumentsDeleteCommand(env *Environment) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <collection> <id>",
 		Short: "Delete or purge a document",
-		Args:  cobra.ExactArgs(2),
+		Long: `Delete a document (soft delete) or permanently purge it from the database.
+
+By default, documents are soft-deleted and can be recovered. Use --purge to permanently remove the document from the database (this cannot be undone).
+
+Soft-deleted documents can still be queried with the --include-deleted flag.`,
+		Example: `  # Soft delete a document (can be recovered)
+  tdb tenant documents delete users user_123 --api-key $API_KEY
+
+  # Permanently purge a document (cannot be undone)
+  tdb tenant documents delete users user_456 --purge --api-key $API_KEY
+
+  # Purge with confirmation prompt
+  tdb tenant documents delete orders order_789 --purge --confirm --api-key $API_KEY
+
+  # Delete from a specific app
+  tdb tenant documents delete logs log_001 --app app_123 --api-key $API_KEY`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
 			if err != nil {
@@ -844,7 +983,56 @@ func newTenantDocumentsSyncCommand(env *Environment) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sync <collection>",
 		Short: "Sync documents by primary key from JSON payload (create or update)",
-		Args:  cobra.ExactArgs(1),
+		Long: `Synchronize documents in a collection by upserting (create or update) based on primary key values.
+
+Accepts JSONL (JSON Lines) or JSON array format. Each document must include its primary key field. Documents that don't exist will be created; existing documents will be updated based on the mode.
+
+Modes:
+  - patch: Merge changes with existing documents (default)
+  - update: Completely replace existing documents
+  - create: Only create new documents, skip existing ones
+
+Use --skip-missing to only update existing documents without creating new ones.`,
+		Example: `  # Sync from JSONL file (patch mode)
+  tdb tenant documents sync users --file users.jsonl --api-key $API_KEY
+
+  # Sync from JSON array (update mode - full replacement)
+  tdb tenant documents sync products \
+    --file products.json \
+    --mode update \
+    --api-key $API_KEY
+
+  # Sync from stdin
+  cat orders.jsonl | tdb tenant documents sync orders --stdin --api-key $API_KEY
+
+  # Only update existing documents (skip creation)
+  tdb tenant documents sync users \
+    --file updates.jsonl \
+    --skip-missing \
+    --api-key $API_KEY
+
+  # Sync with custom primary key field
+  tdb tenant documents sync products \
+    --file products.jsonl \
+    --key-field sku \
+    --api-key $API_KEY
+
+  # Example JSONL format (users.jsonl):
+  # {"email":"user1@example.com","name":"Alice","role":"admin"}
+  # {"email":"user2@example.com","name":"Bob","role":"user"}
+
+  # Example JSON array format (products.json):
+  # [
+  #   {"sku":"ABC-123","name":"Widget","price":29.99},
+  #   {"sku":"XYZ-789","name":"Gadget","price":49.99"}
+  # ]
+
+  # For a specific app
+  tdb tenant documents sync logs \
+    --file logs.jsonl \
+    --app app_123 \
+    --api-key $API_KEY`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
 			if err != nil {

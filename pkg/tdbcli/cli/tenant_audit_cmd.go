@@ -36,6 +36,43 @@ func newTenantAuditCommand(env *Environment) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "audit",
 		Short: "Inspect audit log entries",
+		Long: `Inspect and filter audit log entries for document operations.
+
+View a detailed history of document creates, updates, patches, deletes, and purges with support for filtering by collection, document, actor, operation type, and time ranges.
+
+Time filters support relative durations (e.g., "48h", "7d") or absolute RFC3339 timestamps.`,
+		Example: `  # List recent audit logs
+  tdb tenant audit --api-key $API_KEY
+
+  # Filter by collection
+  tdb tenant audit --collection users --api-key $API_KEY
+
+  # Filter by time range (last 48 hours)
+  tdb tenant audit --since 48h --api-key $API_KEY
+
+  # Filter by operation type
+  tdb tenant audit --operation delete --api-key $API_KEY
+
+  # Filter by document
+  tdb tenant audit --document doc_123 --api-key $API_KEY
+
+  # Filter by actor (user/API key)
+  tdb tenant audit --actor user@example.com --api-key $API_KEY
+
+  # Combine multiple filters
+  tdb tenant audit \
+    --collection orders \
+    --operation create \
+    --since 24h \
+    --until 2h \
+    --limit 100 \
+    --api-key $API_KEY
+
+  # Sort by creation time
+  tdb tenant audit --sort created_at --api-key $API_KEY
+
+  # Pretty-print JSON output
+  tdb tenant audit --raw-pretty --limit 20`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
 			if err != nil {

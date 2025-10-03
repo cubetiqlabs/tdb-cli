@@ -7,17 +7,31 @@ TinyDB CLI is a standalone command-line interface for managing TinyDB tenants, c
 
 ## Features
 
--   Tenant and API key management
--   Collection & schema lifecycle commands
--   Document CRUD and bulk operations
--   Saved query lifecycle and execution helpers
--   Report query execution for ad-hoc aggregations
--   Audit log inspection with filtering and sorting
--   Snapshot management for backup and restore operations
--   Document version metadata for optimistic concurrency (timestamps + sequence headers)
--   Real-time authentication check via `/api/me`
--   Offline export helpers and install scripts
--   Self-upgrade via `tdb upgrade`
+-   **Tenant & API Key Management** - Secure multi-tenant operations
+-   **Collection & Schema Lifecycle** - Dynamic schema management with validation
+-   **Document CRUD & Bulk Operations** - Efficient data manipulation at scale
+-   **Saved Query Management** - Store and execute complex queries
+-   **Report Query Execution** - Ad-hoc aggregations and analytics
+-   **Audit Log Inspection** - Comprehensive filtering and sorting
+-   **Snapshot Management** - Full and incremental backups with encryption
+-   **Version Metadata** - Optimistic concurrency control
+-   **Real-Time Auth Check** - `/api/me` endpoint integration
+-   **Offline Export Helpers** - Cross-platform install scripts
+-   **Self-Upgrade** - `tdb upgrade` command for easy updates
+
+## 📚 Documentation
+
+-   **[Quick Start Guide](docs/QUICKSTART.md)** - Get started in minutes
+-   **[Snapshot Management](docs/SNAPSHOT_CLI.md)** - Backup and restore guide
+-   **[CLI Enhancements](docs/CLI_ENHANCEMENTS.md)** - Comprehensive command reference
+-   **[Developer Guide](docs/DEVELOPER_GUIDE.md)** - Extend and contribute to the CLI
+-   **[Contributing](docs/CONTRIBUTING.md)** - Contribution guidelines
+
+All commands include detailed help text with examples:
+```bash
+tdb tenant collections --help  # See all collection commands
+tdb tenant documents create --help  # Get detailed examples
+```
 
 ## Installation
 
@@ -56,6 +70,30 @@ tdb --help
 ```
 
 See `tdb <command> --help` for details on each command. Configuration is stored under `~/.config/tdb/config.yaml` by default.
+
+### Quick Examples
+
+```bash
+# List collections
+tdb tenant collections list --api-key $API_KEY
+
+# Create a document
+tdb tenant documents create users \
+  --data '{"name":"Alice","email":"alice@example.com"}' \
+  --api-key $API_KEY
+
+# Create a backup
+tdb tenant snapshots create \
+  --collection users \
+  --name "Daily backup" \
+  --encrypt \
+  --api-key $API_KEY
+
+# View audit logs
+tdb tenant audit --collection users --since 24h --api-key $API_KEY
+```
+
+For comprehensive examples and workflows, see the [Quick Start Guide](docs/QUICKSTART.md).
 
 ### Collection inspection
 
@@ -188,9 +226,22 @@ Override the remote or branch by setting `REMOTE` / `BRANCH`. After the tag is p
 
 ## Contributing
 
-1. Fork the repository and create a feature branch.
-2. Run `go test ./...` and `go vet ./...` before opening a pull request.
-3. Open a PR targeting the `main` branch.
+We welcome contributions! Please see our [Contributing Guide](docs/CONTRIBUTING.md) and [Developer Guide](docs/DEVELOPER_GUIDE.md) for details.
+
+Quick start for contributors:
+
+1. Fork the repository and create a feature branch
+2. Follow the [command development patterns](docs/DEVELOPER_GUIDE.md#command-development-lifecycle)
+3. Run `go test ./...` and `go vet ./...` before opening a pull request
+4. Open a PR targeting the `main` branch
+
+All commands should include:
+- Detailed `Long` description
+- At least 3-7 practical examples
+- Comprehensive error handling
+- Unit tests
+
+See existing commands in `pkg/tdbcli/cli/` for reference patterns.
 
 ## License
 

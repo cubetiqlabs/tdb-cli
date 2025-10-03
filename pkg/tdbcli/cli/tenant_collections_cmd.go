@@ -26,6 +26,26 @@ func newTenantCollectionsListCommand(env *Environment) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List collections for a tenant",
+		Long: `List all collections for a tenant with detailed information including document counts, storage size, and primary key configuration.
+
+Use the --describe flag to inspect collection schemas and document structure, or individual flags like --show-schema and --inspect-docs for granular control.`,
+		Example: `  # List all collections
+  tdb tenant collections list --api-key $API_KEY
+
+  # List collections for a specific application
+  tdb tenant collections list --api-key $API_KEY --app app_123
+
+  # Show collection schemas and inspect document structure
+  tdb tenant collections list --describe
+
+  # Show only schemas without document inspection
+  tdb tenant collections list --show-schema
+
+  # Inspect documents with custom limit
+  tdb tenant collections list --inspect-docs --inspect-limit 20
+
+  # Get raw JSON output
+  tdb tenant collections list --raw`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
 			if err != nil {
@@ -393,7 +413,16 @@ func newTenantCollectionsGetCommand(env *Environment) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get <name>",
 		Short: "Fetch a collection by name",
-		Args:  cobra.ExactArgs(1),
+		Long:  `Retrieve detailed information about a specific collection including schema, primary key configuration, and statistics.`,
+		Example: `  # Get collection details
+  tdb tenant collections get users --api-key $API_KEY
+
+  # Get collection for a specific app
+  tdb tenant collections get orders --api-key $API_KEY --app app_123
+
+  # Get raw JSON output
+  tdb tenant collections get users --raw`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
 			if err != nil {
@@ -456,6 +485,47 @@ func newTenantCollectionsCreateCommand(env *Environment) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a collection",
+		Long: `Create a new collection with optional JSON schema validation and primary key configuration.
+
+You can specify the schema inline using --schema, from a file using --schema-file, or let the collection accept any JSON document if no schema is provided.
+
+Primary key configuration allows you to define custom document identifiers with auto-generation support.`,
+		Example: `  # Create a simple collection
+  tdb tenant collections create --name users --api-key $API_KEY
+
+  # Create with a JSON schema
+  tdb tenant collections create \
+    --name products \
+    --schema '{"type":"object","properties":{"name":{"type":"string"}}}' \
+    --api-key $API_KEY
+
+  # Create with schema from file
+  tdb tenant collections create \
+    --name orders \
+    --schema-file schema.json \
+    --api-key $API_KEY
+
+  # Create with custom primary key
+  tdb tenant collections create \
+    --name customers \
+    --pk-field customer_id \
+    --pk-type string \
+    --api-key $API_KEY
+
+  # Create with auto-generated UUID primary key
+  tdb tenant collections create \
+    --name events \
+    --pk-field event_id \
+    --pk-type string \
+    --pk-auto \
+    --api-key $API_KEY
+
+  # Create for a specific app with sync mode (create or update)
+  tdb tenant collections create \
+    --name logs \
+    --app app_123 \
+    --sync \
+    --api-key $API_KEY`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
 			if err != nil {
@@ -531,7 +601,36 @@ func newTenantCollectionsUpdateCommand(env *Environment) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "update <name>",
 		Short: "Update a collection's schema",
-		Args:  cobra.ExactArgs(1),
+		Long: `Update an existing collection's JSON schema or primary key configuration.
+
+You can update the schema validation rules, modify primary key settings, or both. At least one update parameter must be provided.`,
+		Example: `  # Update collection schema
+  tdb tenant collections update users \
+    --schema '{"type":"object","required":["email"]}' \
+    --api-key $API_KEY
+
+  # Update schema from file
+  tdb tenant collections update products \
+    --schema-file new-schema.json \
+    --api-key $API_KEY
+
+  # Update primary key configuration
+  tdb tenant collections update orders \
+    --pk-field order_number \
+    --pk-type string \
+    --api-key $API_KEY
+
+  # Enable auto-generation for primary key
+  tdb tenant collections update events \
+    --pk-auto \
+    --api-key $API_KEY
+
+  # Update for a specific app with raw output
+  tdb tenant collections update logs \
+    --schema-file schema.json \
+    --app app_123 \
+    --raw`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
 			if err != nil {
@@ -601,7 +700,19 @@ func newTenantCollectionsDeleteCommand(env *Environment) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "delete <name>",
 		Short: "Delete a collection",
-		Args:  cobra.ExactArgs(1),
+		Long: `Permanently delete a collection and all its documents.
+
+WARNING: This operation is irreversible and will delete all documents in the collection. Consider creating a snapshot before deletion for backup purposes.`,
+		Example: `  # Delete a collection
+  tdb tenant collections delete old-logs --api-key $API_KEY
+
+  # Delete a collection from a specific app
+  tdb tenant collections delete temp-data --app app_123 --api-key $API_KEY
+
+  # Backup before deleting
+  tdb tenant snapshots create --collection users --name "Before deletion"
+  tdb tenant collections delete users --api-key $API_KEY`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
 			if err != nil {
@@ -636,6 +747,49 @@ func newTenantCollectionsSyncCommand(env *Environment) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sync",
 		Short: "Sync collections from JSON definitions (create or update)",
+		Long: `Synchronize collections from JSON definitions supporting bulk create or update operations.
+
+Accepts an array of collection definitions or an object keyed by collection name. Collections that don't exist will be created; existing collections can be updated based on the mode.
+
+Modes:
+  - create: Only create new collections, skip existing ones (default)
+  - update: Only update existing collections, skip new ones
+  - upsert: Create new collections and update existing ones`,
+		Example: `  # Sync from inline JSON (array format)
+  tdb tenant collections sync --data '[
+    {"name":"users","schema":{"type":"object"}},
+    {"name":"orders","schema":{"type":"object"}}
+  ]' --api-key $API_KEY
+
+  # Sync from file (object format)
+  tdb tenant collections sync --file collections.json --api-key $API_KEY
+
+  # Sync from stdin in upsert mode
+  cat collections.json | tdb tenant collections sync --stdin --mode upsert --api-key $API_KEY
+
+  # Example collections.json (array format):
+  # [
+  #   {
+  #     "name": "users",
+  #     "schema": {"type": "object", "properties": {"email": {"type": "string"}}},
+  #     "primary_key": {"field": "user_id", "type": "string", "auto": true}
+  #   },
+  #   {
+  #     "name": "products",
+  #     "schema": {"type": "object"}
+  #   }
+  # ]
+
+  # Example collections.json (object format):
+  # {
+  #   "users": {
+  #     "schema": {"type": "object"},
+  #     "primary_key": {"field": "id", "type": "string"}
+  #   },
+  #   "orders": {
+  #     "schema": {"type": "object"}
+  #   }
+  # }`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
 			if err != nil {

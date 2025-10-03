@@ -22,6 +22,15 @@ func newTenantQueriesListCommand(env *Environment) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List saved queries",
+		Long:  `List all saved queries for the tenant with their names, types, target collections, and last updated timestamps.`,
+		Example: `  # List all saved queries
+  tdb tenant queries list --api-key $API_KEY
+
+  # List queries for a specific app
+  tdb tenant queries list --app app_123 --api-key $API_KEY
+
+  # Get raw JSON output
+  tdb tenant queries list --raw`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
 			if err != nil {
@@ -84,7 +93,18 @@ func newTenantQueriesGetCommand(env *Environment) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get <id_or_name>",
 		Short: "Fetch a saved query",
-		Args:  cobra.ExactArgs(1),
+		Long: `Retrieve a saved query by its ID or name.
+
+By default, fetches by ID. Use --by-name to fetch by query name instead.`,
+		Example: `  # Get query by ID
+  tdb tenant queries get query_123 --api-key $API_KEY
+
+  # Get query by name
+  tdb tenant queries get "Active Users Report" --by-name --api-key $API_KEY
+
+  # Get with raw JSON output
+  tdb tenant queries get query_456 --raw`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
 			if err != nil {

@@ -45,6 +45,14 @@ func newAdminTenantListCommand(env *Environment) *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List all tenants",
+		Long:  `List all tenants in the TinyDB instance with statistics including application count, collection count, document count, and storage usage.`,
+		Example: `  # List all tenants
+  tdb admin tenants list --admin-secret $ADMIN_SECRET
+
+  # List with custom endpoint
+  tdb admin tenants list \
+    --endpoint https://tinydb.example.com \
+    --admin-secret $ADMIN_SECRET`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
 			if err != nil {
@@ -93,6 +101,29 @@ func newAdminTenantCreateCommand(env *Environment) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Create a new tenant",
+		Long: `Create a new tenant with optional API key generation.
+
+Optionally generate and store an API key for the new tenant for immediate use. The generated key can be saved to local config for convenience.`,
+		Example: `  # Create a basic tenant
+  tdb admin tenants create \
+    --name "Production" \
+    --description "Production environment" \
+    --admin-secret $ADMIN_SECRET
+
+  # Create tenant with API key
+  tdb admin tenants create \
+    --name "Staging" \
+    --with-key \
+    --admin-secret $ADMIN_SECRET
+
+  # Create tenant and save API key to config
+  tdb admin tenants create \
+    --name "Development" \
+    --with-key \
+    --save-key-as dev-key \
+    --set-default \
+    --tenant-name "Dev Environment" \
+    --admin-secret $ADMIN_SECRET`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
 			if err != nil {
