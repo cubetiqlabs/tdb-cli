@@ -93,33 +93,60 @@ func newTenantDocumentsListCommand(env *Environment) *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			tenantClient, _, _, err := auth.resolveTenantClient(envCtx, cmd)
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			collection := strings.TrimSpace(args[0])
-			if collection == "" { return errors.New("collection name cannot be empty") }
+			if collection == "" {
+				return errors.New("collection name cannot be empty")
+			}
 			pageLimit := limit
-			if pageLimit <= 0 { pageLimit = 50 }
+			if pageLimit <= 0 {
+				pageLimit = 50
+			}
 			filterMap := map[string]string{}
 			for _, f := range filters {
 				parts := strings.SplitN(f, "=", 2)
-				if len(parts) != 2 { return fmt.Errorf("invalid filter %q (expected key=value)", f) }
+				if len(parts) != 2 {
+					return fmt.Errorf("invalid filter %q (expected key=value)", f)
+				}
 				k := strings.TrimSpace(parts[0])
 				v := strings.TrimSpace(parts[1])
-				if k == "" { return fmt.Errorf("filter key cannot be empty: %q", f) }
+				if k == "" {
+					return fmt.Errorf("filter key cannot be empty: %q", f)
+				}
 				filterMap[k] = v
 			}
 			params := clientpkg.ListDocumentsParams{AppID: auth.appID, Limit: pageLimit, Offset: offset, Cursor: strings.TrimSpace(cursor), IncludeDeleted: includeDeleted, Filters: filterMap}
-			if trimmed := strings.TrimSpace(selectFields); trimmed != "" { params.SelectFields = splitCommaList(trimmed) }
+			if trimmed := strings.TrimSpace(selectFields); trimmed != "" {
+				params.SelectFields = splitCommaList(trimmed)
+			}
 			params.SelectOnly = selectOnly
-			if trimmed := strings.TrimSpace(sortFields); trimmed != "" { sortTokens, err := normalizeDocumentSortTokens(splitCommaList(trimmed)); if err != nil { return err }; params.Sort = sortTokens }
+			if trimmed := strings.TrimSpace(sortFields); trimmed != "" {
+				sortTokens, err := normalizeDocumentSortTokens(splitCommaList(trimmed))
+				if err != nil {
+					return err
+				}
+				params.Sort = sortTokens
+			}
 			resp, err := tenantClient.ListDocuments(cmd.Context(), collection, params)
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			if raw || rawPretty {
-				if rawPretty { return printJSON(cmd, resp) }
+				if rawPretty {
+					return printJSON(cmd, resp)
+				}
 				return printJSON(cmd, resp)
 			}
-			if len(resp.Items) == 0 { fmt.Fprintln(cmd.OutOrStdout(), "No documents found"); return nil }
+			if len(resp.Items) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No documents found")
+				return nil
+			}
 			rows := make([][]string, 0, len(resp.Items))
 			for _, item := range resp.Items {
 				rows = append(rows, []string{
@@ -588,40 +615,75 @@ func newTenantDocumentsCountCommand(env *Environment) *cobra.Command {
 
 // buildReportBody merges explicit body JSON (if any) with CLI flag derived groupBy / aggregates.
 func buildReportBody(base map[string]any, groupBy []string, aggregates []string) map[string]any {
-	if base == nil { base = map[string]any{} }
+	if base == nil {
+		base = map[string]any{}
+	}
 	if len(groupBy) > 0 {
-		if _, ok := base["groupBy"]; !ok { base["groupBy"] = groupBy }
+		if _, ok := base["groupBy"]; !ok {
+			base["groupBy"] = groupBy
+		}
 	}
 	if len(aggregates) > 0 {
 		var specs []map[string]any
 		for _, spec := range aggregates {
 			trim := strings.TrimSpace(spec)
-			if trim == "" { continue }
+			if trim == "" {
+				continue
+			}
 			parts := strings.Split(trim, ":")
 			var op, field, alias string
 			distinct := false
-			if len(parts) > 0 { op = strings.ToLower(strings.TrimSpace(parts[0])) }
-			if len(parts) > 1 { field = strings.TrimSpace(parts[1]) }
-			if len(parts) > 2 { alias = strings.TrimSpace(parts[2]) }
-			if strings.HasSuffix(op, "!distinct") { op = strings.TrimSuffix(op, "!distinct"); distinct = true }
-			if op == "" { continue }
+			if len(parts) > 0 {
+				op = strings.ToLower(strings.TrimSpace(parts[0]))
+			}
+			if len(parts) > 1 {
+				field = strings.TrimSpace(parts[1])
+			}
+			if len(parts) > 2 {
+				alias = strings.TrimSpace(parts[2])
+			}
+			if strings.HasSuffix(op, "!distinct") {
+				op = strings.TrimSuffix(op, "!distinct")
+				distinct = true
+			}
+			if op == "" {
+				continue
+			}
 			agg := map[string]any{"operation": op}
-			if field != "" { agg["field"] = field }
-			if alias != "" { agg["alias"] = alias }
-			if distinct { agg["distinct"] = true }
+			if field != "" {
+				agg["field"] = field
+			}
+			if alias != "" {
+				agg["alias"] = alias
+			}
+			if distinct {
+				agg["distinct"] = true
+			}
 			specs = append(specs, agg)
 		}
-		if len(specs) > 0 { if _, ok := base["aggregate"]; !ok { base["aggregate"] = specs } }
+		if len(specs) > 0 {
+			if _, ok := base["aggregate"]; !ok {
+				base["aggregate"] = specs
+			}
+		}
 	}
 	return base
 }
 
 // decideStreamingExport returns whether to stream given current flags & reasons for fallback.
 func decideStreamingExport(requested bool, filters []string, includeDeleted bool, format string) (bool, string) {
-	if !requested { return false, "" }
-	if includeDeleted { return false, "include-deleted not supported in streaming" }
-	if len(filters) > 0 { return false, "filters not supported in streaming" }
-	if strings.ToLower(strings.TrimSpace(format)) == "json" { return false, "json array format not supported in streaming" }
+	if !requested {
+		return false, ""
+	}
+	if includeDeleted {
+		return false, "include-deleted not supported in streaming"
+	}
+	if len(filters) > 0 {
+		return false, "filters not supported in streaming"
+	}
+	if strings.ToLower(strings.TrimSpace(format)) == "json" {
+		return false, "json array format not supported in streaming"
+	}
 	return true, ""
 }
 
@@ -662,22 +724,39 @@ func parseAggregateSpecs(raw []string) ([]aggregateSpecCLI, []string) {
 	var warnings []string
 	for _, r := range raw {
 		trim := strings.TrimSpace(r)
-		if trim == "" { continue }
+		if trim == "" {
+			continue
+		}
 		parts := strings.Split(trim, ":")
 		var op, field, alias string
 		distinct := false
-		if len(parts) > 0 { op = strings.ToLower(strings.TrimSpace(parts[0])) }
-		if op == "" { warnings = append(warnings, "ignored empty operation") ; continue }
-		if strings.HasSuffix(op, "!distinct") { op = strings.TrimSuffix(op, "!distinct"); distinct = true }
-		if len(parts) > 1 { field = strings.TrimSpace(parts[1]) }
-		if len(parts) > 2 { alias = strings.TrimSpace(parts[2]) }
+		if len(parts) > 0 {
+			op = strings.ToLower(strings.TrimSpace(parts[0]))
+		}
+		if op == "" {
+			warnings = append(warnings, "ignored empty operation")
+			continue
+		}
+		if strings.HasSuffix(op, "!distinct") {
+			op = strings.TrimSuffix(op, "!distinct")
+			distinct = true
+		}
+		if len(parts) > 1 {
+			field = strings.TrimSpace(parts[1])
+		}
+		if len(parts) > 2 {
+			alias = strings.TrimSpace(parts[2])
+		}
 		switch op { // basic validation; backend will enforce deeper rules
-		case "count","sum","min","max","avg":
+		case "count", "sum", "min", "max", "avg":
 		default:
 			warnings = append(warnings, fmt.Sprintf("unsupported aggregate op '%s'", op))
 			continue
 		}
-		if op != "count" && field == "" { warnings = append(warnings, fmt.Sprintf("aggregate %s requires a field", op)); continue }
+		if op != "count" && field == "" {
+			warnings = append(warnings, fmt.Sprintf("aggregate %s requires a field", op))
+			continue
+		}
 		specs = append(specs, aggregateSpecCLI{Operation: op, Field: field, Alias: alias, Distinct: distinct})
 	}
 	return specs, warnings
@@ -686,12 +765,32 @@ func parseAggregateSpecs(raw []string) ([]aggregateSpecCLI, []string) {
 // expandAggregateSugar turns sugar flags into aggregateSpecCLI entries.
 func expandAggregateSugar(count bool, countDistinct string, sums, mins, maxes, avgs []string) []aggregateSpecCLI {
 	var specs []aggregateSpecCLI
-	if count { specs = append(specs, aggregateSpecCLI{Operation: "count"}) }
-	if cd := strings.TrimSpace(countDistinct); cd != "" { specs = append(specs, aggregateSpecCLI{Operation: "count", Field: cd, Distinct: true, Alias: "count_distinct_"+cd}) }
-	for _, f := range sums { if t:=strings.TrimSpace(f); t!="" { specs = append(specs, aggregateSpecCLI{Operation:"sum", Field:t}) } }
-	for _, f := range mins { if t:=strings.TrimSpace(f); t!="" { specs = append(specs, aggregateSpecCLI{Operation:"min", Field:t}) } }
-	for _, f := range maxes { if t:=strings.TrimSpace(f); t!="" { specs = append(specs, aggregateSpecCLI{Operation:"max", Field:t}) } }
-	for _, f := range avgs { if t:=strings.TrimSpace(f); t!="" { specs = append(specs, aggregateSpecCLI{Operation:"avg", Field:t}) } }
+	if count {
+		specs = append(specs, aggregateSpecCLI{Operation: "count"})
+	}
+	if cd := strings.TrimSpace(countDistinct); cd != "" {
+		specs = append(specs, aggregateSpecCLI{Operation: "count", Field: cd, Distinct: true, Alias: "count_distinct_" + cd})
+	}
+	for _, f := range sums {
+		if t := strings.TrimSpace(f); t != "" {
+			specs = append(specs, aggregateSpecCLI{Operation: "sum", Field: t})
+		}
+	}
+	for _, f := range mins {
+		if t := strings.TrimSpace(f); t != "" {
+			specs = append(specs, aggregateSpecCLI{Operation: "min", Field: t})
+		}
+	}
+	for _, f := range maxes {
+		if t := strings.TrimSpace(f); t != "" {
+			specs = append(specs, aggregateSpecCLI{Operation: "max", Field: t})
+		}
+	}
+	for _, f := range avgs {
+		if t := strings.TrimSpace(f); t != "" {
+			specs = append(specs, aggregateSpecCLI{Operation: "avg", Field: t})
+		}
+	}
 	return specs
 }
 func newTenantDocumentsReportCommand(env *Environment) *cobra.Command {
@@ -765,7 +864,9 @@ func newTenantDocumentsReportCommand(env *Environment) *cobra.Command {
 			if gb := strings.TrimSpace(groupBy); gb != "" {
 				fields := splitCommaList(gb)
 				if len(fields) > 0 {
-					if _, ok := body["groupBy"]; !ok { body["groupBy"] = fields }
+					if _, ok := body["groupBy"]; !ok {
+						body["groupBy"] = fields
+					}
 				}
 			}
 
@@ -780,15 +881,29 @@ func newTenantDocumentsReportCommand(env *Environment) *cobra.Command {
 				var aggSpecs []map[string]any
 				for _, s := range parsedAll {
 					agg := map[string]any{"operation": s.Operation}
-					if s.Field != "" { agg["field"] = s.Field }
-					if s.Alias != "" { agg["alias"] = s.Alias }
-					if s.Distinct { agg["distinct"] = true }
+					if s.Field != "" {
+						agg["field"] = s.Field
+					}
+					if s.Alias != "" {
+						agg["alias"] = s.Alias
+					}
+					if s.Distinct {
+						agg["distinct"] = true
+					}
 					aggSpecs = append(aggSpecs, agg)
 				}
-				if len(aggSpecs) > 0 { if _, ok := body["aggregate"]; !ok { body["aggregate"] = aggSpecs } }
+				if len(aggSpecs) > 0 {
+					if _, ok := body["aggregate"]; !ok {
+						body["aggregate"] = aggSpecs
+					}
+				}
 			}
-			for _, w := range warnings { fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", w) }
-			for _, w := range dupWarnings { fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", w) }
+			for _, w := range warnings {
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", w)
+			}
+			for _, w := range dupWarnings {
+				fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", w)
+			}
 			if limit > 0 || limit == -1 {
 				if _, ok := body["limit"]; !ok {
 					body["limit"] = limit
@@ -858,7 +973,7 @@ func newTenantDocumentsReportCommand(env *Environment) *cobra.Command {
 	cmd.Flags().StringArrayVar(&aggMaxes, "max", nil, "Add MAX(field) aggregate (repeatable)")
 	cmd.Flags().StringArrayVar(&aggAvgs, "avg", nil, "Add AVG(field) aggregate (repeatable)")
 
- 	return cmd
+	return cmd
 }
 
 func newTenantDocumentsExportCommand(env *Environment) *cobra.Command {
@@ -896,15 +1011,25 @@ Examples:
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			tenantClient, _, _, err := auth.resolveTenantClient(envCtx, cmd)
-			if err != nil { return err }
+			if err != nil {
+				return err
+			}
 			collection := strings.TrimSpace(args[0])
-			if collection == "" { return errors.New("collection name cannot be empty") }
+			if collection == "" {
+				return errors.New("collection name cannot be empty")
+			}
 
 			mode := strings.ToLower(strings.TrimSpace(format))
-			if mode == "" { mode = "jsonl" }
-			if mode != "jsonl" && mode != "json" { return fmt.Errorf("unsupported format %q (choose json or jsonl)", mode) }
+			if mode == "" {
+				mode = "jsonl"
+			}
+			if mode != "jsonl" && mode != "json" {
+				return fmt.Errorf("unsupported format %q (choose json or jsonl)", mode)
+			}
 
 			// Decide streaming usage via helper
 			if ok, reason := decideStreamingExport(stream, filters, includeDeleted, mode); stream && !ok {
@@ -916,21 +1041,31 @@ Examples:
 			}
 
 			selector := []string{}
-			if trimmed := strings.TrimSpace(selectFields); trimmed != "" { selector = splitCommaList(trimmed) }
+			if trimmed := strings.TrimSpace(selectFields); trimmed != "" {
+				selector = splitCommaList(trimmed)
+			}
 
 			// Streaming path
 			if stream {
 				body, headers, err := tenantClient.StreamExport(cmd.Context(), collection, selector, selectOnly, strings.TrimSpace(cursor), pageSize, auth.appID)
-				if err != nil { return err }
+				if err != nil {
+					return err
+				}
 				defer body.Close()
 				var out *bufio.Writer
 				var file *os.File
 				if trimmed := strings.TrimSpace(outPath); trimmed != "" {
 					clean := filepath.Clean(trimmed)
-					if dir := filepath.Dir(clean); dir != "." && dir != "" { if err := os.MkdirAll(dir, 0o755); err != nil { return err } }
+					if dir := filepath.Dir(clean); dir != "." && dir != "" {
+						if err := os.MkdirAll(dir, 0o755); err != nil {
+							return err
+						}
+					}
 					file, err = os.Create(clean)
-					if err != nil { return err }
-					defer func(){ _ = file.Close() }()
+					if err != nil {
+						return err
+					}
+					defer func() { _ = file.Close() }()
 					out = bufio.NewWriter(file)
 					defer out.Flush()
 				} else {
@@ -959,31 +1094,45 @@ Examples:
 									}
 								}
 							}
-							if _, err := out.Write(trim); err != nil { return err }
-							if _, err := out.WriteString("\n"); err != nil { return err }
+							if _, err := out.Write(trim); err != nil {
+								return err
+							}
+							if _, err := out.WriteString("\n"); err != nil {
+								return err
+							}
 							lines++
 						}
 					}
 					if readErr != nil {
-						if readErr == io.EOF { break }
+						if readErr == io.EOF {
+							break
+						}
 						return readErr
 					}
 				}
-				if next := headers.Get("X-Next-Cursor"); next != "" { fmt.Fprintf(cmd.ErrOrStderr(), "NEXT_CURSOR: %s\n", strings.TrimSpace(next)) }
+				if next := headers.Get("X-Next-Cursor"); next != "" {
+					fmt.Fprintf(cmd.ErrOrStderr(), "NEXT_CURSOR: %s\n", strings.TrimSpace(next))
+				}
 				fmt.Fprintf(cmd.ErrOrStderr(), "Streamed %d documents\n", lines)
 				return nil
 			}
 
 			// Paginated path
 			page := pageSize
-			if page <= 0 { page = 100 }
+			if page <= 0 {
+				page = 100
+			}
 			filterMap := map[string]string{}
 			for _, f := range filters {
 				parts := strings.SplitN(f, "=", 2)
-				if len(parts) != 2 { return fmt.Errorf("invalid filter %q (expected key=value)", f) }
+				if len(parts) != 2 {
+					return fmt.Errorf("invalid filter %q (expected key=value)", f)
+				}
 				k := strings.TrimSpace(parts[0])
 				v := strings.TrimSpace(parts[1])
-				if k == "" { return fmt.Errorf("filter key cannot be empty: %q", f) }
+				if k == "" {
+					return fmt.Errorf("filter key cannot be empty: %q", f)
+				}
 				filterMap[k] = v
 			}
 
@@ -991,10 +1140,16 @@ Examples:
 			var file *os.File
 			if trimmed := strings.TrimSpace(outPath); trimmed != "" {
 				clean := filepath.Clean(trimmed)
-				if dir := filepath.Dir(clean); dir != "." && dir != "" { if err := os.MkdirAll(dir, 0o755); err != nil { return err } }
+				if dir := filepath.Dir(clean); dir != "." && dir != "" {
+					if err := os.MkdirAll(dir, 0o755); err != nil {
+						return err
+					}
+				}
 				file, err = os.Create(clean)
-				if err != nil { return err }
-				defer func(){ _ = file.Close() }()
+				if err != nil {
+					return err
+				}
+				defer func() { _ = file.Close() }()
 				out = bufio.NewWriter(file)
 				defer out.Flush()
 			} else {
@@ -1004,43 +1159,91 @@ Examples:
 
 			jsonArray := mode == "json"
 			if jsonArray {
-				if _, err := out.WriteString("["); err != nil { return err }
-				if pretty { if _, err := out.WriteString("\n"); err != nil { return err } }
+				if _, err := out.WriteString("["); err != nil {
+					return err
+				}
+				if pretty {
+					if _, err := out.WriteString("\n"); err != nil {
+						return err
+					}
+				}
 			}
 			written := 0
 			offset := 0
 			first := true
 			for {
 				params := clientpkg.ListDocumentsParams{AppID: auth.appID, Limit: page, Offset: offset, IncludeDeleted: includeDeleted, Filters: map[string]string{}}
-				for k,v := range filterMap { params.Filters[k] = v }
-				if len(selector) > 0 { params.SelectFields = selector }
+				for k, v := range filterMap {
+					params.Filters[k] = v
+				}
+				if len(selector) > 0 {
+					params.SelectFields = selector
+				}
 				params.SelectOnly = selectOnly
 				resp, err := tenantClient.ListDocuments(cmd.Context(), collection, params)
-				if err != nil { return err }
-				if len(resp.Items) == 0 { break }
+				if err != nil {
+					return err
+				}
+				if len(resp.Items) == 0 {
+					break
+				}
 				for _, doc := range resp.Items {
 					payload, err := buildExportPayload(doc, includeMeta, pretty)
-					if err != nil { return fmt.Errorf("prepare document %s: %w", doc.ID, err) }
+					if err != nil {
+						return fmt.Errorf("prepare document %s: %w", doc.ID, err)
+					}
 					if jsonArray {
 						if !first {
-							if pretty { if _, err := out.WriteString(",\n"); err != nil { return err } } else { if _, err := out.WriteString(","); err != nil { return err } }
-						} else { first = false }
-						if _, err := out.Write(payload); err != nil { return err }
-						if pretty { if _, err := out.WriteString("\n"); err != nil { return err } }
+							if pretty {
+								if _, err := out.WriteString(",\n"); err != nil {
+									return err
+								}
+							} else {
+								if _, err := out.WriteString(","); err != nil {
+									return err
+								}
+							}
+						} else {
+							first = false
+						}
+						if _, err := out.Write(payload); err != nil {
+							return err
+						}
+						if pretty {
+							if _, err := out.WriteString("\n"); err != nil {
+								return err
+							}
+						}
 					} else {
-						if _, err := out.Write(payload); err != nil { return err }
-						if _, err := out.WriteString("\n"); err != nil { return err }
+						if _, err := out.Write(payload); err != nil {
+							return err
+						}
+						if _, err := out.WriteString("\n"); err != nil {
+							return err
+						}
 					}
 					written++
 				}
 				offset += len(resp.Items)
-				if len(resp.Items) < page { break }
+				if len(resp.Items) < page {
+					break
+				}
 			}
 			if jsonArray {
-				if _, err := out.WriteString("]"); err != nil { return err }
-				if pretty { if _, err := out.WriteString("\n"); err != nil { return err } }
+				if _, err := out.WriteString("]"); err != nil {
+					return err
+				}
+				if pretty {
+					if _, err := out.WriteString("\n"); err != nil {
+						return err
+					}
+				}
 			}
-			if trimmed := strings.TrimSpace(outPath); trimmed != "" { fmt.Fprintf(cmd.ErrOrStderr(), "Exported %d documents to %s\n", written, trimmed) } else { fmt.Fprintf(cmd.ErrOrStderr(), "Exported %d documents\n", written) }
+			if trimmed := strings.TrimSpace(outPath); trimmed != "" {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Exported %d documents to %s\n", written, trimmed)
+			} else {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Exported %d documents\n", written)
+			}
 			return nil
 		},
 	}

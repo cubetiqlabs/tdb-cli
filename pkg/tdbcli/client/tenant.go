@@ -239,20 +239,39 @@ func (c *TenantClient) ListDocuments(ctx context.Context, collection string, par
 // selectFields optional (projection). selectOnly when true excludes implicit metadata fields.
 func (c *TenantClient) StreamExport(ctx context.Context, collection string, selectFields []string, selectOnly bool, cursor string, limit int, appID string) (io.ReadCloser, http.Header, error) {
 	values := url.Values{}
-	if trimmed := strings.TrimSpace(appID); trimmed != "" { values.Set("app_id", trimmed) }
-	if limit != 0 { values.Set("limit", strconv.Itoa(limit)) }
-	if trimmed := strings.TrimSpace(cursor); trimmed != "" { values.Set("cursor", trimmed) }
-	if len(selectFields) > 0 { values.Set("select", strings.Join(selectFields, ",")) }
-	if selectOnly { values.Set("select_only", "true") }
+	if trimmed := strings.TrimSpace(appID); trimmed != "" {
+		values.Set("app_id", trimmed)
+	}
+	if limit != 0 {
+		values.Set("limit", strconv.Itoa(limit))
+	}
+	if trimmed := strings.TrimSpace(cursor); trimmed != "" {
+		values.Set("cursor", trimmed)
+	}
+	if len(selectFields) > 0 {
+		values.Set("select", strings.Join(selectFields, ","))
+	}
+	if selectOnly {
+		values.Set("select_only", "true")
+	}
 	path := fmt.Sprintf("/api/collections/%s/export", url.PathEscape(collection))
-	if enc := values.Encode(); enc != "" { path += "?" + enc }
+	if enc := values.Encode(); enc != "" {
+		path += "?" + enc
+	}
 	req, err := c.newJSONRequest(ctx, http.MethodGet, path, nil)
-	if err != nil { return nil, nil, err }
+	if err != nil {
+		return nil, nil, err
+	}
 	c.authorize(req)
 	c.applyAppScope(req, appID)
 	resp, err := c.httpClient.Do(req)
-	if err != nil { return nil, nil, err }
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 { defer resp.Body.Close(); return nil, nil, fmt.Errorf("export request failed: %s", resp.Status) }
+	if err != nil {
+		return nil, nil, err
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		defer resp.Body.Close()
+		return nil, nil, fmt.Errorf("export request failed: %s", resp.Status)
+	}
 	return resp.Body, resp.Header, nil
 }
 
