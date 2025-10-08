@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -18,172 +19,17 @@ import (
 	clientpkg "github.com/cubetiqlabs/tdb-cli/pkg/tdbcli/client"
 )
 
-func newTenantDocumentsListCommand(env *Environment) *cobra.Command {
-	var auth authFlags
-	var limit int
-	var offset int
-	var includeDeleted bool
-	var selectFields string
-	var filters []string
-	var raw bool
-	var rawPretty bool
-	var cursor string
-	var sortFields []string
-
-	cmd := &cobra.Command{
-		Use:   "list <collection>",
-		Short: "List documents in a collection",
-		Long: `List documents from a collection with support for filtering, sorting, pagination, and field selection.
-
-Supports both offset-based and cursor-based pagination. Use --cursor for efficient pagination of large result sets.
-
-Filters use simple key=value syntax and support dotted paths for nested fields.`,
-		Example: `  # List all documents
-  tdb tenant documents list users --api-key $API_KEY
-
-  # List with limit and offset
-  tdb tenant documents list products --limit 20 --offset 40 --api-key $API_KEY
-
-  # List with cursor-based pagination
-  tdb tenant documents list orders --limit 50 --cursor eyJpZCI6... --api-key $API_KEY
-
-  # Filter documents
-  tdb tenant documents list users \
-    --filter status=active \
-    --filter role=admin \
-    --api-key $API_KEY
-
-  # Sort documents (field:asc or field:desc)
-  tdb tenant documents list products \
-    --sort price:asc \
-    --sort created_at:desc \
-    --api-key $API_KEY
-
-  # Select specific fields
-  tdb tenant documents list users \
-    --select email,name,created_at \
-    --api-key $API_KEY
-
-  # Include soft-deleted documents
-  tdb tenant documents list orders --include-deleted --api-key $API_KEY
-
-  # Pretty-print JSON output
-  tdb tenant documents list users --raw-pretty --api-key $API_KEY
-
-  # For a specific application
-  tdb tenant documents list logs --app app_123 --api-key $API_KEY`,
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			envCtx, err := requireEnvironment(env)
-			if err != nil {
-				return err
-			}
-			tenantClient, _, _, err := auth.resolveTenantClient(envCtx, cmd)
-			if err != nil {
-				return err
-			}
-			collection := strings.TrimSpace(args[0])
-			if collection == "" {
-				return errors.New("collection name cannot be empty")
-			}
-			params := clientpkg.ListDocumentsParams{
-				AppID:          auth.appID,
-				Limit:          limit,
-				Offset:         offset,
-				Cursor:         strings.TrimSpace(cursor),
-				IncludeDeleted: includeDeleted,
-				Filters:        make(map[string]string),
-			}
-			normalizedSort, err := normalizeDocumentSortTokens(sortFields)
-			if err != nil {
-				return err
-			}
-			params.Sort = normalizedSort
-			if trimmed := strings.TrimSpace(selectFields); trimmed != "" {
-				params.SelectFields = splitCommaList(trimmed)
-			}
-			for _, f := range filters {
-				parts := strings.SplitN(f, "=", 2)
-				if len(parts) != 2 {
-					return fmt.Errorf("invalid filter %q, expected key=value", f)
-				}
-				key := strings.TrimSpace(parts[0])
-				value := strings.TrimSpace(parts[1])
-				if key == "" {
-					return fmt.Errorf("filter key cannot be empty: %q", f)
-				}
-				params.Filters[key] = value
-			}
-			resp, err := tenantClient.ListDocuments(cmd.Context(), collection, params)
-			if err != nil {
-				return err
-			}
-			if raw || rawPretty {
-				if rawPretty {
-					payload := makeDocumentListPretty(resp)
-					return printJSON(cmd, payload)
-				}
-				return printJSON(cmd, resp)
-			}
-			if len(resp.Items) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No documents found")
-				return nil
-			}
-			rows := make([][]string, 0, len(resp.Items))
-			for _, doc := range resp.Items {
-				deleted := "-"
-				if doc.DeletedAt != nil {
-					deleted = formatRelativeTimePtr(doc.DeletedAt, "-")
-				}
-				rows = append(rows, []string{
-					doc.ID,
-					doc.Key,
-					formatRelativeTime(doc.CreatedAt, "-"),
-					formatRelativeTime(doc.UpdatedAt, "-"),
-					deleted,
-					formatBytes(doc.DataSize),
-					summarizeJSON(doc.Data, 60),
-				})
-			}
-			renderTable(cmd, []string{"ID", "KEY", "CREATED", "UPDATED", "DELETED", "SIZE", "DATA"}, rows)
-			return nil
-		},
-	}
-
-	auth.bindWithApp(cmd)
-	cmd.Flags().IntVar(&limit, "limit", 0, "Maximum number of documents to return")
-	cmd.Flags().IntVar(&offset, "offset", 0, "Offset for paginated results")
-	cmd.Flags().StringVar(&cursor, "cursor", "", "Cursor token for paginated results")
-	cmd.Flags().BoolVar(&includeDeleted, "include-deleted", false, "Include soft-deleted documents")
-	cmd.Flags().StringVar(&selectFields, "select", "", "Comma-separated list of fields to project")
-	cmd.Flags().StringArrayVar(&filters, "filter", nil, "Filter predicate in the form field=value (repeatable)")
-	cmd.Flags().StringSliceVar(&sortFields, "sort", []string{"-created_at"}, "Sort order (comma separated). Prefix with - for descending. Fields: created_at, updated_at, version, id, key, key_numeric, deleted_at")
-	cmd.Flags().BoolVar(&raw, "raw", false, "Print raw JSON response")
-	cmd.Flags().BoolVar(&rawPretty, "raw-pretty", false, "Print pretty JSON response")
-
-	return cmd
-}
+// Reconstructed missing commands (list/get) and cleaned export implementation.
 
 func newTenantDocumentsGetCommand(env *Environment) *cobra.Command {
 	var auth authFlags
 	var raw bool
 	var rawPretty bool
+
 	cmd := &cobra.Command{
 		Use:   "get <collection> <id>",
-		Short: "Fetch a document by ID",
-		Long:  `Retrieve a single document by its ID or primary key value.`,
-		Example: `  # Get document by ID
-  tdb tenant documents get users user_123 --api-key $API_KEY
-
-  # Get document by primary key
-  tdb tenant documents get products SKU-789 --api-key $API_KEY
-
-  # Get with pretty-printed JSON
-  tdb tenant documents get orders order_456 --raw-pretty --api-key $API_KEY
-
-  # Get from a specific app
-  tdb tenant documents get logs log_001 --app app_123 --api-key $API_KEY`,
-		Args: cobra.ExactArgs(2),
+		Short: "Get a document by ID",
+		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
 			if err != nil {
@@ -223,6 +69,81 @@ func newTenantDocumentsGetCommand(env *Environment) *cobra.Command {
 		},
 	}
 	auth.bindWithApp(cmd)
+	cmd.Flags().BoolVar(&raw, "raw", false, "Print raw JSON response")
+	cmd.Flags().BoolVar(&rawPretty, "raw-pretty", false, "Print pretty JSON response")
+	return cmd
+}
+
+func newTenantDocumentsListCommand(env *Environment) *cobra.Command {
+	var auth authFlags
+	var limit int
+	var offset int
+	var cursor string
+	var includeDeleted bool
+	var filters []string
+	var selectFields string
+	var selectOnly bool
+	var sortFields string
+	var raw bool
+	var rawPretty bool
+
+	cmd := &cobra.Command{
+		Use:   "list <collection>",
+		Short: "List documents in a collection",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			envCtx, err := requireEnvironment(env)
+			if err != nil { return err }
+			tenantClient, _, _, err := auth.resolveTenantClient(envCtx, cmd)
+			if err != nil { return err }
+			collection := strings.TrimSpace(args[0])
+			if collection == "" { return errors.New("collection name cannot be empty") }
+			pageLimit := limit
+			if pageLimit <= 0 { pageLimit = 50 }
+			filterMap := map[string]string{}
+			for _, f := range filters {
+				parts := strings.SplitN(f, "=", 2)
+				if len(parts) != 2 { return fmt.Errorf("invalid filter %q (expected key=value)", f) }
+				k := strings.TrimSpace(parts[0])
+				v := strings.TrimSpace(parts[1])
+				if k == "" { return fmt.Errorf("filter key cannot be empty: %q", f) }
+				filterMap[k] = v
+			}
+			params := clientpkg.ListDocumentsParams{AppID: auth.appID, Limit: pageLimit, Offset: offset, Cursor: strings.TrimSpace(cursor), IncludeDeleted: includeDeleted, Filters: filterMap}
+			if trimmed := strings.TrimSpace(selectFields); trimmed != "" { params.SelectFields = splitCommaList(trimmed) }
+			params.SelectOnly = selectOnly
+			if trimmed := strings.TrimSpace(sortFields); trimmed != "" { sortTokens, err := normalizeDocumentSortTokens(splitCommaList(trimmed)); if err != nil { return err }; params.Sort = sortTokens }
+			resp, err := tenantClient.ListDocuments(cmd.Context(), collection, params)
+			if err != nil { return err }
+			if raw || rawPretty {
+				if rawPretty { return printJSON(cmd, resp) }
+				return printJSON(cmd, resp)
+			}
+			if len(resp.Items) == 0 { fmt.Fprintln(cmd.OutOrStdout(), "No documents found"); return nil }
+			rows := make([][]string, 0, len(resp.Items))
+			for _, item := range resp.Items {
+				rows = append(rows, []string{
+					item.ID,
+					item.Key,
+					formatTime(item.CreatedAt),
+					formatTime(item.UpdatedAt),
+				})
+			}
+			renderTable(cmd, []string{"ID", "KEY", "CREATED", "UPDATED"}, rows)
+			p := resp.Pagination
+			fmt.Fprintf(cmd.OutOrStdout(), "COUNT: %d  LIMIT: %d  OFFSET: %d\n", p.Count, p.Limit, p.Offset)
+			return nil
+		},
+	}
+	auth.bindWithApp(cmd)
+	cmd.Flags().IntVar(&limit, "limit", 50, "Maximum number of documents to return")
+	cmd.Flags().IntVar(&offset, "offset", 0, "Offset for pagination")
+	cmd.Flags().StringVar(&cursor, "cursor", "", "Cursor for pagination")
+	cmd.Flags().BoolVar(&includeDeleted, "include-deleted", false, "Include soft-deleted documents")
+	cmd.Flags().StringArrayVar(&filters, "filter", nil, "Filter predicate field=value (repeatable)")
+	cmd.Flags().StringVar(&selectFields, "select", "", "Comma-separated list of fields to project")
+	cmd.Flags().BoolVar(&selectOnly, "select-only", false, "Restrict output to selected fields only (omit implicit metadata fields)")
+	cmd.Flags().StringVar(&sortFields, "sort", "-created_at", "Comma-separated sort fields (prefix with - for descending)")
 	cmd.Flags().BoolVar(&raw, "raw", false, "Print raw JSON response")
 	cmd.Flags().BoolVar(&rawPretty, "raw-pretty", false, "Print pretty JSON response")
 	return cmd
@@ -665,6 +586,114 @@ func newTenantDocumentsCountCommand(env *Environment) *cobra.Command {
 	return cmd
 }
 
+// buildReportBody merges explicit body JSON (if any) with CLI flag derived groupBy / aggregates.
+func buildReportBody(base map[string]any, groupBy []string, aggregates []string) map[string]any {
+	if base == nil { base = map[string]any{} }
+	if len(groupBy) > 0 {
+		if _, ok := base["groupBy"]; !ok { base["groupBy"] = groupBy }
+	}
+	if len(aggregates) > 0 {
+		var specs []map[string]any
+		for _, spec := range aggregates {
+			trim := strings.TrimSpace(spec)
+			if trim == "" { continue }
+			parts := strings.Split(trim, ":")
+			var op, field, alias string
+			distinct := false
+			if len(parts) > 0 { op = strings.ToLower(strings.TrimSpace(parts[0])) }
+			if len(parts) > 1 { field = strings.TrimSpace(parts[1]) }
+			if len(parts) > 2 { alias = strings.TrimSpace(parts[2]) }
+			if strings.HasSuffix(op, "!distinct") { op = strings.TrimSuffix(op, "!distinct"); distinct = true }
+			if op == "" { continue }
+			agg := map[string]any{"operation": op}
+			if field != "" { agg["field"] = field }
+			if alias != "" { agg["alias"] = alias }
+			if distinct { agg["distinct"] = true }
+			specs = append(specs, agg)
+		}
+		if len(specs) > 0 { if _, ok := base["aggregate"]; !ok { base["aggregate"] = specs } }
+	}
+	return base
+}
+
+// decideStreamingExport returns whether to stream given current flags & reasons for fallback.
+func decideStreamingExport(requested bool, filters []string, includeDeleted bool, format string) (bool, string) {
+	if !requested { return false, "" }
+	if includeDeleted { return false, "include-deleted not supported in streaming" }
+	if len(filters) > 0 { return false, "filters not supported in streaming" }
+	if strings.ToLower(strings.TrimSpace(format)) == "json" { return false, "json array format not supported in streaming" }
+	return true, ""
+}
+
+// aggregateSpec represents a parsed aggregate clause (internal to CLI helpers)
+type aggregateSpecCLI struct {
+	Operation string
+	Field     string
+	Alias     string
+	Distinct  bool
+}
+
+// dedupeAggregateSpecs removes duplicate aggregate specs (same op, field, distinct) keeping the first occurrence.
+// Alias differences do not create uniqueness; the earliest alias is preserved. Returns warnings for any removed duplicates.
+func dedupeAggregateSpecs(specs []aggregateSpecCLI) ([]aggregateSpecCLI, []string) {
+	seen := make(map[string]struct{})
+	var out []aggregateSpecCLI
+	var warnings []string
+	for _, s := range specs {
+		key := s.Operation + "|" + s.Field + "|" + strconv.FormatBool(s.Distinct)
+		if _, exists := seen[key]; exists {
+			// duplicate; emit warning referencing alias if present
+			if s.Alias != "" {
+				warnings = append(warnings, fmt.Sprintf("duplicate aggregate ignored (%s %s distinct=%v alias=%s)", s.Operation, s.Field, s.Distinct, s.Alias))
+			} else {
+				warnings = append(warnings, fmt.Sprintf("duplicate aggregate ignored (%s %s distinct=%v)", s.Operation, s.Field, s.Distinct))
+			}
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, s)
+	}
+	return out, warnings
+}
+
+// parseAggregateSpecs converts user raw specs (op[:field][:alias][!distinct]) to structured specs, collecting warnings.
+func parseAggregateSpecs(raw []string) ([]aggregateSpecCLI, []string) {
+	var specs []aggregateSpecCLI
+	var warnings []string
+	for _, r := range raw {
+		trim := strings.TrimSpace(r)
+		if trim == "" { continue }
+		parts := strings.Split(trim, ":")
+		var op, field, alias string
+		distinct := false
+		if len(parts) > 0 { op = strings.ToLower(strings.TrimSpace(parts[0])) }
+		if op == "" { warnings = append(warnings, "ignored empty operation") ; continue }
+		if strings.HasSuffix(op, "!distinct") { op = strings.TrimSuffix(op, "!distinct"); distinct = true }
+		if len(parts) > 1 { field = strings.TrimSpace(parts[1]) }
+		if len(parts) > 2 { alias = strings.TrimSpace(parts[2]) }
+		switch op { // basic validation; backend will enforce deeper rules
+		case "count","sum","min","max","avg":
+		default:
+			warnings = append(warnings, fmt.Sprintf("unsupported aggregate op '%s'", op))
+			continue
+		}
+		if op != "count" && field == "" { warnings = append(warnings, fmt.Sprintf("aggregate %s requires a field", op)); continue }
+		specs = append(specs, aggregateSpecCLI{Operation: op, Field: field, Alias: alias, Distinct: distinct})
+	}
+	return specs, warnings
+}
+
+// expandAggregateSugar turns sugar flags into aggregateSpecCLI entries.
+func expandAggregateSugar(count bool, countDistinct string, sums, mins, maxes, avgs []string) []aggregateSpecCLI {
+	var specs []aggregateSpecCLI
+	if count { specs = append(specs, aggregateSpecCLI{Operation: "count"}) }
+	if cd := strings.TrimSpace(countDistinct); cd != "" { specs = append(specs, aggregateSpecCLI{Operation: "count", Field: cd, Distinct: true, Alias: "count_distinct_"+cd}) }
+	for _, f := range sums { if t:=strings.TrimSpace(f); t!="" { specs = append(specs, aggregateSpecCLI{Operation:"sum", Field:t}) } }
+	for _, f := range mins { if t:=strings.TrimSpace(f); t!="" { specs = append(specs, aggregateSpecCLI{Operation:"min", Field:t}) } }
+	for _, f := range maxes { if t:=strings.TrimSpace(f); t!="" { specs = append(specs, aggregateSpecCLI{Operation:"max", Field:t}) } }
+	for _, f := range avgs { if t:=strings.TrimSpace(f); t!="" { specs = append(specs, aggregateSpecCLI{Operation:"avg", Field:t}) } }
+	return specs
+}
 func newTenantDocumentsReportCommand(env *Environment) *cobra.Command {
 	var auth authFlags
 	var data string
@@ -674,12 +703,22 @@ func newTenantDocumentsReportCommand(env *Environment) *cobra.Command {
 	var offset int
 	var cursor string
 	var selectFields string
+	var selectOnly bool
+	var groupBy string
+	var aggregates []string
+	// sugar flags
+	var aggCount bool
+	var aggCountDistinct string
+	var aggSums []string
+	var aggMins []string
+	var aggMaxes []string
+	var aggAvgs []string
 	var raw bool
 	var rawPretty bool
 
 	cmd := &cobra.Command{
 		Use:   "report <collection>",
-		Short: "Run a report query for a collection",
+		Short: "Run a report / analytics query for a collection",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
@@ -722,7 +761,35 @@ func newTenantDocumentsReportCommand(env *Environment) *cobra.Command {
 			if trimmed := strings.TrimSpace(selectFields); trimmed != "" {
 				params.SelectFields = splitCommaList(trimmed)
 			}
-			if limit > 0 {
+			params.SelectOnly = selectOnly
+			if gb := strings.TrimSpace(groupBy); gb != "" {
+				fields := splitCommaList(gb)
+				if len(fields) > 0 {
+					if _, ok := body["groupBy"]; !ok { body["groupBy"] = fields }
+				}
+			}
+
+			// Parse explicit aggregate specs
+			parsedExplicit, warnings := parseAggregateSpecs(aggregates)
+			// Sugar expansions
+			sugar := expandAggregateSugar(aggCount, aggCountDistinct, aggSums, aggMins, aggMaxes, aggAvgs)
+			parsedAll := append(parsedExplicit, sugar...)
+			// Dedupe (explicit specs take precedence because they appear first)
+			parsedAll, dupWarnings := dedupeAggregateSpecs(parsedAll)
+			if len(parsedAll) > 0 {
+				var aggSpecs []map[string]any
+				for _, s := range parsedAll {
+					agg := map[string]any{"operation": s.Operation}
+					if s.Field != "" { agg["field"] = s.Field }
+					if s.Alias != "" { agg["alias"] = s.Alias }
+					if s.Distinct { agg["distinct"] = true }
+					aggSpecs = append(aggSpecs, agg)
+				}
+				if len(aggSpecs) > 0 { if _, ok := body["aggregate"]; !ok { body["aggregate"] = aggSpecs } }
+			}
+			for _, w := range warnings { fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", w) }
+			for _, w := range dupWarnings { fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s\n", w) }
+			if limit > 0 || limit == -1 {
 				if _, ok := body["limit"]; !ok {
 					body["limit"] = limit
 				}
@@ -740,6 +807,11 @@ func newTenantDocumentsReportCommand(env *Environment) *cobra.Command {
 			if len(params.SelectFields) > 0 {
 				if _, ok := body["select"]; !ok {
 					body["select"] = params.SelectFields
+				}
+			}
+			if params.SelectOnly {
+				if _, ok := body["selectOnly"]; !ok {
+					body["selectOnly"] = true
 				}
 			}
 
@@ -774,200 +846,216 @@ func newTenantDocumentsReportCommand(env *Environment) *cobra.Command {
 	cmd.Flags().IntVar(&offset, "offset", 0, "Override offset for the report query")
 	cmd.Flags().StringVar(&cursor, "cursor", "", "Cursor token for paginated reports")
 	cmd.Flags().StringVar(&selectFields, "select", "", "Comma-separated list of fields to project")
+	cmd.Flags().StringVar(&groupBy, "group-by", "", "Comma-separated list of fields to group by (report mode)")
+	cmd.Flags().StringArrayVar(&aggregates, "aggregate", nil, "Aggregate spec op[:field][:alias][!distinct] (repeatable, e.g. --aggregate count --aggregate sum:price:total_sales)")
 	cmd.Flags().BoolVar(&raw, "raw", false, "Print raw JSON response")
 	cmd.Flags().BoolVar(&rawPretty, "raw-pretty", false, "Print pretty JSON response")
+	// Sugar aggregate flags
+	cmd.Flags().BoolVar(&aggCount, "count", false, "Add COUNT(*) aggregate")
+	cmd.Flags().StringVar(&aggCountDistinct, "count-distinct", "", "Add COUNT(DISTINCT <field>) aggregate")
+	cmd.Flags().StringArrayVar(&aggSums, "sum", nil, "Add SUM(field) aggregate (repeatable)")
+	cmd.Flags().StringArrayVar(&aggMins, "min", nil, "Add MIN(field) aggregate (repeatable)")
+	cmd.Flags().StringArrayVar(&aggMaxes, "max", nil, "Add MAX(field) aggregate (repeatable)")
+	cmd.Flags().StringArrayVar(&aggAvgs, "avg", nil, "Add AVG(field) aggregate (repeatable)")
 
-	return cmd
+ 	return cmd
 }
 
 func newTenantDocumentsExportCommand(env *Environment) *cobra.Command {
 	var auth authFlags
 	var filters []string
 	var selectFields string
+	var selectOnly bool
 	var includeDeleted bool
 	var outPath string
 	var format string
 	var pretty bool
 	var includeMeta bool
 	var pageSize int
+	var stream bool
+	var cursor string
 
 	cmd := &cobra.Command{
 		Use:   "export <collection>",
-		Short: "Export documents to stdout or a file",
-		Args:  cobra.ExactArgs(1),
+		Short: "Export documents (supports streaming NDJSON)",
+		Long: `Export documents from a collection.
+
+Modes:
+  - Paginated (default): uses ListDocuments API (supports filters, include-deleted, JSON array output)
+  - Streaming (--stream): uses server NDJSON export endpoint for efficient full scans (no filters, jsonl only)
+
+Examples:
+  # Stream all documents as NDJSON
+  tdb tenant documents export users --stream --api-key $API_KEY
+
+  # Paginated export to a file (JSONL)
+  tdb tenant documents export events --filter type=click --out events.jsonl --api-key $API_KEY
+
+  # JSON array pretty output (paginated mode)
+  tdb tenant documents export products --format json --pretty --api-key $API_KEY`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			envCtx, err := requireEnvironment(env)
-			if err != nil {
-				return err
-			}
+			if err != nil { return err }
 			tenantClient, _, _, err := auth.resolveTenantClient(envCtx, cmd)
-			if err != nil {
-				return err
-			}
+			if err != nil { return err }
 			collection := strings.TrimSpace(args[0])
-			if collection == "" {
-				return errors.New("collection name cannot be empty")
-			}
-			page := pageSize
-			if page <= 0 {
-				page = 100
-			}
+			if collection == "" { return errors.New("collection name cannot be empty") }
+
 			mode := strings.ToLower(strings.TrimSpace(format))
-			if mode == "" {
-				mode = "jsonl"
+			if mode == "" { mode = "jsonl" }
+			if mode != "jsonl" && mode != "json" { return fmt.Errorf("unsupported format %q (choose json or jsonl)", mode) }
+
+			// Decide streaming usage via helper
+			if ok, reason := decideStreamingExport(stream, filters, includeDeleted, mode); stream && !ok {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Streaming disabled: %s; falling back to paginated export\n", reason)
+				stream = false
+			} else if stream && mode != "jsonl" { // defensive (helper already checks json format keyword only)
+				fmt.Fprintln(cmd.ErrOrStderr(), "Streaming only supports jsonl format; falling back to paginated export")
+				stream = false
 			}
-			if mode != "jsonl" && mode != "json" {
-				return fmt.Errorf("unsupported format %q (choose json or jsonl)", mode)
+
+			selector := []string{}
+			if trimmed := strings.TrimSpace(selectFields); trimmed != "" { selector = splitCommaList(trimmed) }
+
+			// Streaming path
+			if stream {
+				body, headers, err := tenantClient.StreamExport(cmd.Context(), collection, selector, selectOnly, strings.TrimSpace(cursor), pageSize, auth.appID)
+				if err != nil { return err }
+				defer body.Close()
+				var out *bufio.Writer
+				var file *os.File
+				if trimmed := strings.TrimSpace(outPath); trimmed != "" {
+					clean := filepath.Clean(trimmed)
+					if dir := filepath.Dir(clean); dir != "." && dir != "" { if err := os.MkdirAll(dir, 0o755); err != nil { return err } }
+					file, err = os.Create(clean)
+					if err != nil { return err }
+					defer func(){ _ = file.Close() }()
+					out = bufio.NewWriter(file)
+					defer out.Flush()
+				} else {
+					out = bufio.NewWriter(cmd.OutOrStdout())
+					defer out.Flush()
+				}
+				// Stream line by line to output; optionally transform if includeMeta false and line has 'data'.
+				reader := bufio.NewReader(body)
+				lines := 0
+				for {
+					line, readErr := reader.ReadBytes('\n')
+					if len(line) > 0 {
+						trim := bytes.TrimSpace(line)
+						if len(trim) > 0 {
+							if !includeMeta {
+								var parsed map[string]any
+								if json.Unmarshal(trim, &parsed) == nil {
+									if dataVal, ok := parsed["data"]; ok {
+										if pretty {
+											b, _ := json.MarshalIndent(dataVal, "", "  ")
+											trim = b
+										} else {
+											b, _ := json.Marshal(dataVal)
+											trim = b
+										}
+									}
+								}
+							}
+							if _, err := out.Write(trim); err != nil { return err }
+							if _, err := out.WriteString("\n"); err != nil { return err }
+							lines++
+						}
+					}
+					if readErr != nil {
+						if readErr == io.EOF { break }
+						return readErr
+					}
+				}
+				if next := headers.Get("X-Next-Cursor"); next != "" { fmt.Fprintf(cmd.ErrOrStderr(), "NEXT_CURSOR: %s\n", strings.TrimSpace(next)) }
+				fmt.Fprintf(cmd.ErrOrStderr(), "Streamed %d documents\n", lines)
+				return nil
 			}
-			filtersMap := make(map[string]string)
+
+			// Paginated path
+			page := pageSize
+			if page <= 0 { page = 100 }
+			filterMap := map[string]string{}
 			for _, f := range filters {
 				parts := strings.SplitN(f, "=", 2)
-				if len(parts) != 2 {
-					return fmt.Errorf("invalid filter %q, expected key=value", f)
-				}
-				key := strings.TrimSpace(parts[0])
-				value := strings.TrimSpace(parts[1])
-				if key == "" {
-					return fmt.Errorf("filter key cannot be empty: %q", f)
-				}
-				filtersMap[key] = value
+				if len(parts) != 2 { return fmt.Errorf("invalid filter %q (expected key=value)", f) }
+				k := strings.TrimSpace(parts[0])
+				v := strings.TrimSpace(parts[1])
+				if k == "" { return fmt.Errorf("filter key cannot be empty: %q", f) }
+				filterMap[k] = v
 			}
-			selector := splitCommaList(selectFields)
-			targetPath := strings.TrimSpace(outPath)
-			var writer *bufio.Writer
+
+			var out *bufio.Writer
 			var file *os.File
-			if targetPath != "" {
-				cleanPath := filepath.Clean(targetPath)
-				dir := filepath.Dir(cleanPath)
-				if dir != "." && dir != "" {
-					if err := os.MkdirAll(dir, 0o755); err != nil {
-						return fmt.Errorf("create output directory: %w", err)
-					}
-				}
-				file, err = os.Create(cleanPath)
-				if err != nil {
-					return err
-				}
-				writer = bufio.NewWriter(file)
-				defer func() {
-					_ = writer.Flush()
-					_ = file.Close()
-				}()
+			if trimmed := strings.TrimSpace(outPath); trimmed != "" {
+				clean := filepath.Clean(trimmed)
+				if dir := filepath.Dir(clean); dir != "." && dir != "" { if err := os.MkdirAll(dir, 0o755); err != nil { return err } }
+				file, err = os.Create(clean)
+				if err != nil { return err }
+				defer func(){ _ = file.Close() }()
+				out = bufio.NewWriter(file)
+				defer out.Flush()
 			} else {
-				writer = bufio.NewWriter(cmd.OutOrStdout())
-				defer writer.Flush()
+				out = bufio.NewWriter(cmd.OutOrStdout())
+				defer out.Flush()
 			}
-			jsonFormat := mode == "json"
-			first := true
-			if jsonFormat {
-				if _, err := writer.WriteString("["); err != nil {
-					return err
-				}
-				if pretty {
-					if _, err := writer.WriteString("\n"); err != nil {
-						return err
-					}
-				}
+
+			jsonArray := mode == "json"
+			if jsonArray {
+				if _, err := out.WriteString("["); err != nil { return err }
+				if pretty { if _, err := out.WriteString("\n"); err != nil { return err } }
 			}
 			written := 0
 			offset := 0
+			first := true
 			for {
-				params := clientpkg.ListDocumentsParams{
-					AppID:          auth.appID,
-					Limit:          page,
-					Offset:         offset,
-					IncludeDeleted: includeDeleted,
-					Filters:        make(map[string]string, len(filtersMap)),
-				}
-				for k, v := range filtersMap {
-					params.Filters[k] = v
-				}
-				if len(selector) > 0 {
-					params.SelectFields = selector
-				}
+				params := clientpkg.ListDocumentsParams{AppID: auth.appID, Limit: page, Offset: offset, IncludeDeleted: includeDeleted, Filters: map[string]string{}}
+				for k,v := range filterMap { params.Filters[k] = v }
+				if len(selector) > 0 { params.SelectFields = selector }
+				params.SelectOnly = selectOnly
 				resp, err := tenantClient.ListDocuments(cmd.Context(), collection, params)
-				if err != nil {
-					return err
-				}
-				if len(resp.Items) == 0 {
-					break
-				}
+				if err != nil { return err }
+				if len(resp.Items) == 0 { break }
 				for _, doc := range resp.Items {
 					payload, err := buildExportPayload(doc, includeMeta, pretty)
-					if err != nil {
-						return fmt.Errorf("prepare document %s: %w", doc.ID, err)
-					}
-					if jsonFormat {
+					if err != nil { return fmt.Errorf("prepare document %s: %w", doc.ID, err) }
+					if jsonArray {
 						if !first {
-							if pretty {
-								if _, err := writer.WriteString(",\n"); err != nil {
-									return err
-								}
-							} else {
-								if _, err := writer.WriteString(","); err != nil {
-									return err
-								}
-							}
-						} else {
-							first = false
-						}
-						if _, err := writer.Write(payload); err != nil {
-							return err
-						}
-						if pretty {
-							if _, err := writer.WriteString("\n"); err != nil {
-								return err
-							}
-						}
+							if pretty { if _, err := out.WriteString(",\n"); err != nil { return err } } else { if _, err := out.WriteString(","); err != nil { return err } }
+						} else { first = false }
+						if _, err := out.Write(payload); err != nil { return err }
+						if pretty { if _, err := out.WriteString("\n"); err != nil { return err } }
 					} else {
-						if _, err := writer.Write(payload); err != nil {
-							return err
-						}
-						if _, err := writer.WriteString("\n"); err != nil {
-							return err
-						}
+						if _, err := out.Write(payload); err != nil { return err }
+						if _, err := out.WriteString("\n"); err != nil { return err }
 					}
 					written++
 				}
 				offset += len(resp.Items)
-				if len(resp.Items) < page {
-					break
-				}
+				if len(resp.Items) < page { break }
 			}
-			if jsonFormat {
-				if !first && pretty {
-					if _, err := writer.WriteString("]\n"); err != nil {
-						return err
-					}
-				} else {
-					if _, err := writer.WriteString("]"); err != nil {
-						return err
-					}
-					if pretty {
-						if _, err := writer.WriteString("\n"); err != nil {
-							return err
-						}
-					}
-				}
+			if jsonArray {
+				if _, err := out.WriteString("]"); err != nil { return err }
+				if pretty { if _, err := out.WriteString("\n"); err != nil { return err } }
 			}
-			statusOut := cmd.ErrOrStderr()
-			if targetPath != "" {
-				fmt.Fprintf(statusOut, "Exported %d documents to %s\n", written, targetPath)
-			} else {
-				fmt.Fprintf(statusOut, "Exported %d documents\n", written)
-			}
+			if trimmed := strings.TrimSpace(outPath); trimmed != "" { fmt.Fprintf(cmd.ErrOrStderr(), "Exported %d documents to %s\n", written, trimmed) } else { fmt.Fprintf(cmd.ErrOrStderr(), "Exported %d documents\n", written) }
 			return nil
 		},
 	}
 	auth.bindWithApp(cmd)
-	cmd.Flags().StringArrayVar(&filters, "filter", nil, "Filter predicate in the form field=value (repeatable)")
+	cmd.Flags().StringArrayVar(&filters, "filter", nil, "Filter predicate field=value (repeatable; disables streaming)")
 	cmd.Flags().StringVar(&selectFields, "select", "", "Comma-separated list of fields to project")
-	cmd.Flags().BoolVar(&includeDeleted, "include-deleted", false, "Include soft-deleted documents")
+	cmd.Flags().BoolVar(&selectOnly, "select-only", false, "Restrict output to only selected fields (omit implicit metadata)")
+	cmd.Flags().BoolVar(&includeDeleted, "include-deleted", false, "Include soft-deleted documents (disables streaming)")
 	cmd.Flags().StringVar(&outPath, "out", "", "Write output to the specified file (defaults to stdout)")
-	cmd.Flags().StringVar(&format, "format", "jsonl", "Output format: jsonl or json")
-	cmd.Flags().BoolVar(&pretty, "pretty", false, "Pretty-print JSON output")
-	cmd.Flags().BoolVar(&includeMeta, "include-meta", false, "Include document metadata alongside payload data")
-	cmd.Flags().IntVar(&pageSize, "page-size", 100, "Number of documents to fetch per page")
+	cmd.Flags().StringVar(&format, "format", "jsonl", "Output format: jsonl or json (array)")
+	cmd.Flags().BoolVar(&pretty, "pretty", false, "Pretty-print JSON values")
+	cmd.Flags().BoolVar(&includeMeta, "include-meta", false, "Include document metadata alongside payload data (paginated mode)")
+	cmd.Flags().IntVar(&pageSize, "page-size", 100, "Page size for paginated mode or limit hint for streaming")
+	cmd.Flags().BoolVar(&stream, "stream", false, "Use streaming NDJSON export (no filters, no include-deleted, jsonl only)")
+	cmd.Flags().StringVar(&cursor, "cursor", "", "Cursor for streaming continuation (X-Next-Cursor emitted to stderr)")
 	return cmd
 }
 

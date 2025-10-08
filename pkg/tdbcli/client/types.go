@@ -186,6 +186,7 @@ type ListDocumentsParams struct {
 	Cursor         string
 	IncludeDeleted bool
 	SelectFields   []string
+	SelectOnly     bool
 	Filters        map[string]string
 	Sort           []string
 }
@@ -198,6 +199,7 @@ type ReportQueryParams struct {
 	Offset       int
 	Cursor       string
 	SelectFields []string
+	SelectOnly   bool
 	Body         map[string]any
 }
 

@@ -11,11 +11,13 @@ TinyDB CLI is a standalone command-line interface for managing TinyDB tenants, c
 -   **Collection & Schema Lifecycle** - Dynamic schema management with validation
 -   **Document CRUD & Bulk Operations** - Efficient data manipulation at scale
 -   **Saved Query Management** - Store and execute complex queries
--   **Report Query Execution** - Ad-hoc aggregations and analytics
+-   **Report Query Execution** - Ad-hoc aggregations and analytics (supports full scan with `--limit -1`)
 -   **Audit Log Inspection** - Comprehensive filtering and sorting
 -   **Snapshot Management** - Full and incremental backups with encryption
 -   **Version Metadata** - Optimistic concurrency control
 -   **Real-Time Auth Check** - `/api/me` endpoint integration
+-   **Selective Field Projection** - Use `--select` and `--select-only` to project and minimize payloads
+-   **Streaming NDJSON Export** - High-throughput exports via `tenant documents export --stream` (cursor-aware)
 -   **Offline Export Helpers** - Cross-platform install scripts
 -   **Self-Upgrade** - `tdb upgrade` command for easy updates
 
@@ -91,7 +93,71 @@ tdb tenant snapshots create \
 
 # View audit logs
 tdb tenant audit --collection users --since 24h --api-key $API_KEY
+
+# Run a grouped aggregate report (total sales per category)
+tdb tenant documents report orders \
+    --group-by category \
+    --aggregate sum:price:total_sales \
+    --aggregate count::row_count \
+    --limit 50 \
+    --api-key $API_KEY --raw-pretty
+
+# Full scan (within safety window) with projection only
+tdb tenant documents report users --limit -1 --select country,status --select-only --api-key $API_KEY --raw
 ```
+
+### Aggregate Sugar Flags
+
+The `report` command supports both explicit aggregate specs via `--aggregate op[:field][:alias][!distinct]` and convenient sugar flags:
+
+| Sugar Flag | Meaning | Equivalent `--aggregate` |
+|------------|---------|---------------------------|
+| `--count` | COUNT(*) | `--aggregate count` |
+| `--count-distinct field` | COUNT(DISTINCT field) | `--aggregate count:field:count_distinct_field!distinct` |
+| `--sum field` (repeatable) | SUM(field) | `--aggregate sum:field` |
+| `--min field` (repeatable) | MIN(field) | `--aggregate min:field` |
+| `--max field` (repeatable) | MAX(field) | `--aggregate max:field` |
+| `--avg field` (repeatable) | AVG(field) | `--aggregate avg:field` |
+
+Mix and match sugar flags with explicit `--aggregate` specs. Sugar-derived aggregates are appended in the order provided (after any explicit ones). If you pass duplicates (e.g. both `--count` and `--aggregate count`) the backend will currently compute both; prefer one form to avoid redundancy.
+
+Examples:
+
+```bash
+# Simple row count
+tdb tenant documents report orders --count --api-key $API_KEY --raw-pretty
+
+# Count distinct users and total order value
+tdb tenant documents report orders \
+    --count-distinct user_id \
+    --sum amount \
+    --api-key $API_KEY --raw-pretty
+
+# Multiple numeric stats with grouping
+tdb tenant documents report events \
+    --group-by type \
+    --count \
+    --count-distinct session_id \
+    --sum duration_ms \
+    --avg duration_ms \
+    --min duration_ms \
+    --max duration_ms \
+    --api-key $API_KEY --raw-pretty
+
+# Mixing sugar and explicit specs (explicit alias + distinct)
+tdb tenant documents report users \
+    --aggregate sum:credits:total_credits \
+    --avg credits \
+    --count-distinct plan_id \
+    --api-key $API_KEY --raw-pretty
+```
+
+Notes:
+- `--count-distinct field` automatically assigns the alias `count_distinct_<field>`; override with an explicit spec if you need a custom alias.
+- Use `--raw` to see the full pagination object; `--raw-pretty` pretty prints the main data for readability.
+- Supply `--select` / `--select-only` to project fields in grouped or aggregated results as needed.
+- Full scan: combine aggregates with `--limit -1` to process the entire scan window (subject to server safety cap) when you don't know the appropriate limit.
+
 
 For comprehensive examples and workflows, see the [Quick Start Guide](docs/QUICKSTART.md).
 

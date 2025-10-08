@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -206,6 +207,9 @@ func (c *TenantClient) ListDocuments(ctx context.Context, collection string, par
 	if len(params.SelectFields) > 0 {
 		values.Set("select", strings.Join(params.SelectFields, ","))
 	}
+	if params.SelectOnly {
+		values.Set("select_only", "true")
+	}
 	if len(params.Sort) > 0 {
 		values.Set("sort", strings.Join(params.Sort, ","))
 	}
@@ -229,6 +233,27 @@ func (c *TenantClient) ListDocuments(ctx context.Context, collection string, par
 		return nil, err
 	}
 	return &resp, nil
+}
+
+// StreamExport streams documents via the NDJSON export endpoint. Caller is responsible for closing the returned ReadCloser.
+// selectFields optional (projection). selectOnly when true excludes implicit metadata fields.
+func (c *TenantClient) StreamExport(ctx context.Context, collection string, selectFields []string, selectOnly bool, cursor string, limit int, appID string) (io.ReadCloser, http.Header, error) {
+	values := url.Values{}
+	if trimmed := strings.TrimSpace(appID); trimmed != "" { values.Set("app_id", trimmed) }
+	if limit != 0 { values.Set("limit", strconv.Itoa(limit)) }
+	if trimmed := strings.TrimSpace(cursor); trimmed != "" { values.Set("cursor", trimmed) }
+	if len(selectFields) > 0 { values.Set("select", strings.Join(selectFields, ",")) }
+	if selectOnly { values.Set("select_only", "true") }
+	path := fmt.Sprintf("/api/collections/%s/export", url.PathEscape(collection))
+	if enc := values.Encode(); enc != "" { path += "?" + enc }
+	req, err := c.newJSONRequest(ctx, http.MethodGet, path, nil)
+	if err != nil { return nil, nil, err }
+	c.authorize(req)
+	c.applyAppScope(req, appID)
+	resp, err := c.httpClient.Do(req)
+	if err != nil { return nil, nil, err }
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 { defer resp.Body.Close(); return nil, nil, fmt.Errorf("export request failed: %s", resp.Status) }
+	return resp.Body, resp.Header, nil
 }
 
 // CountDocuments returns the number of documents in a collection.
@@ -624,6 +649,9 @@ func (c *TenantClient) ReportQuery(ctx context.Context, params ReportQueryParams
 			payload["limit"] = params.Limit
 		}
 	}
+	if params.Limit == -1 { // full scan sentinel
+		payload["limit"] = -1
+	}
 	if params.Offset > 0 {
 		if _, ok := payload["offset"]; !ok {
 			payload["offset"] = params.Offset
@@ -639,6 +667,11 @@ func (c *TenantClient) ReportQuery(ctx context.Context, params ReportQueryParams
 			payload["select"] = params.SelectFields
 		}
 	}
+	if params.SelectOnly {
+		if _, ok := payload["selectOnly"]; !ok {
+			payload["selectOnly"] = true
+		}
+	}
 	encodedBody, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -651,6 +684,9 @@ func (c *TenantClient) ReportQuery(ctx context.Context, params ReportQueryParams
 	if params.Limit > 0 {
 		values.Set("limit", strconv.Itoa(params.Limit))
 	}
+	if params.Limit == -1 {
+		values.Set("limit", "-1")
+	}
 	if params.Offset > 0 {
 		values.Set("offset", strconv.Itoa(params.Offset))
 	}
@@ -659,6 +695,9 @@ func (c *TenantClient) ReportQuery(ctx context.Context, params ReportQueryParams
 	}
 	if len(params.SelectFields) > 0 {
 		values.Set("select", strings.Join(params.SelectFields, ","))
+	}
+	if params.SelectOnly {
+		values.Set("select_only", "true")
 	}
 
 	path := "/api/query"
