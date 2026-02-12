@@ -106,6 +106,41 @@ tdb tenant documents report orders \
 tdb tenant documents report users --limit -1 --select country,status --select-only --api-key $API_KEY --raw
 ```
 
+### Profile Switching
+
+The CLI supports multiple tenant profiles for easy switching between different environments or accounts. Store API keys and switch between them without repeating credentials:
+
+```bash
+# Interactive switcher (arrow keys to navigate)
+tdb config switch
+
+# List all configured profiles
+tdb config list
+
+# Show detailed key information
+tdb config list --show-keys
+
+# Switch to a different profile (non-interactive)
+tdb config use tenant_123
+
+# Switch profile and set a specific key as default
+tdb config use tenant_456 my-prod-key
+
+# Store a new API key
+tdb config store-key tenant_789 staging-key \
+  --key "tdb_abc123..." \
+  --description "Staging environment" \
+  --set-default
+
+# Use aliases for convenience
+tdb config ls          # Same as 'list'
+tdb config profiles    # Same as 'list'
+```
+
+The **`tdb config switch`** command provides an interactive menu with arrow key navigation (↑/↓) to browse and select profiles. If a tenant has multiple keys, you'll be prompted to select one. This is the easiest way to switch between environments.
+
+The active profile is marked with `*` in the list output and `→` in the interactive switcher. Once set, you don't need to specify `--tenant` or `--api-key` for most commands - they'll use your default profile automatically.
+
 ### Aggregate Sugar Flags
 
 The `report` command supports both explicit aggregate specs via `--aggregate op[:field][:alias][!distinct]` and convenient sugar flags:
