@@ -51,7 +51,7 @@ func DefaultPath() (string, error) {
 		}
 	}
 	dir := filepath.Join(base, "tdb")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
 	return filepath.Join(dir, "config.yaml"), nil
@@ -81,7 +81,7 @@ func (c *Config) Save(path string) error {
 	if c.Tenants == nil {
 		c.Tenants = make(map[string]TenantConfig)
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 	raw, err := yaml.Marshal(c)
@@ -148,8 +148,10 @@ func (c *Config) MaskedAdminSecret() string {
 	if c.AdminSecret == "" {
 		return ""
 	}
-	if len(c.AdminSecret) <= 6 {
-		return strings.Repeat("*", len(c.AdminSecret))
+	runes := []rune(c.AdminSecret)
+	n := len(runes)
+	if n <= 6 {
+		return strings.Repeat("*", n)
 	}
-	return c.AdminSecret[:3] + strings.Repeat("*", len(c.AdminSecret)-6) + c.AdminSecret[len(c.AdminSecret)-3:]
+	return string(runes[:3]) + strings.Repeat("*", n-6) + string(runes[n-3:])
 }
