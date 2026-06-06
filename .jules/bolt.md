@@ -1,0 +1,3 @@
+## 2024-06-06 - Avoid full JSON unmarshaling for pure formatting passes
+**Learning:** `json.Unmarshal` is very slow when we don't actually need to inspect or traverse the parsed structure. In `coerceJSONValue`, unmarshaling just to re-marshal later (e.g., when rendering output in a CLI table or pretty-printer) creates heavy garbage collection and reflection overhead.
+**Action:** When passing a JSON string through to be serialized without inspection, use `json.Valid([]byte(trimmed))` and return `json.RawMessage(trimmed)`. This delegates the parsing verification but skips the full allocation of Go interface maps/slices.

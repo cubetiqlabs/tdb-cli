@@ -231,14 +231,16 @@ func printCompactJSON(cmd *cobra.Command, value interface{}) error {
 	return err
 }
 
+// coerceJSONValue returns the input string if it's invalid JSON,
+// otherwise it returns a json.RawMessage. This prevents unnecessary
+// and expensive Unmarshal calls just to format the JSON string again.
 func coerceJSONValue(raw string) interface{} {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
 		return ""
 	}
-	var value interface{}
-	if err := json.Unmarshal([]byte(trimmed), &value); err == nil {
-		return value
+	if json.Valid([]byte(trimmed)) {
+		return json.RawMessage(trimmed)
 	}
 	return trimmed
 }
