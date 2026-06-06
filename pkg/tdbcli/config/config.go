@@ -153,3 +153,14 @@ func (c *Config) MaskedAdminSecret() string {
 	}
 	return c.AdminSecret[:3] + strings.Repeat("*", len(c.AdminSecret)-6) + c.AdminSecret[len(c.AdminSecret)-3:]
 }
+
+// MaskedKey returns a masked representation of the API key for display.
+func (e *APIKeyEntry) MaskedKey() string {
+	if e.Key == "" {
+		return ""
+	}
+	if len(e.Key) <= 6 {
+		return strings.Repeat("*", len(e.Key))
+	}
+	return e.Key[:3] + strings.Repeat("*", len(e.Key)-6) + e.Key[len(e.Key)-3:]
+}
