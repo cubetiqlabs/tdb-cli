@@ -49,6 +49,20 @@ func newConfigShowCommand(env *Environment) *cobra.Command {
 			}
 			display := *env.Config
 			display.AdminSecret = env.Config.MaskedAdminSecret()
+
+			// Mask API keys in the config display
+			if display.Tenants != nil {
+				for tenantID, tenantCfg := range display.Tenants {
+					if tenantCfg.Keys != nil {
+						for keyAlias, keyEntry := range tenantCfg.Keys {
+							keyEntry.Key = keyEntry.MaskedKey()
+							tenantCfg.Keys[keyAlias] = keyEntry
+						}
+					}
+					display.Tenants[tenantID] = tenantCfg
+				}
+			}
+
 			data, err := yaml.Marshal(display)
 			if err != nil {
 				return err
