@@ -1,0 +1,3 @@
+## 2024-05-14 - json.RawMessage Avoids Allocation in json.MarshalIndent
+**Learning:** Returning `json.RawMessage` instead of unmarshaling a string into `map[string]any` via `json.Unmarshal` when parsing raw JSON strings to be re-marshaled saves massive allocations and CPU time. The `json.MarshalIndent` and `json.Marshal` functions treat `json.RawMessage` as literal JSON bytes, formatting them correctly and outputting them exactly as expected.
+**Action:** Whenever parsing a JSON payload from an API to simply include it in an exported/marshaled output (e.g. CLI tools), validate with `json.Valid([]byte(str))` and return `json.RawMessage` instead of completely decoding to a Go interface{}.

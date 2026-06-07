@@ -1485,6 +1485,16 @@ func decodeDocumentSyncPayload(raw []byte) ([]map[string]any, error) {
 }
 
 func extractDocumentKey(doc map[string]any, pkField, pkType string) (string, error) {
+	// Fast path: avoid allocating slice and iterating/lowercasing for the exact match
+	if pkField != "" {
+		if value, ok := doc[pkField]; ok {
+			key, err := stringifyKey(value, pkType)
+			if err == nil && key != "" {
+				return key, nil
+			}
+		}
+	}
+
 	candidates := []string{pkField, "key", "id"}
 	for _, field := range candidates {
 		if strings.TrimSpace(field) == "" {
@@ -1722,9 +1732,10 @@ func jsonStringToInterface(raw string) interface{} {
 	if trimmed == "" {
 		return map[string]interface{}{}
 	}
-	var anyValue interface{}
-	if err := json.Unmarshal([]byte(trimmed), &anyValue); err == nil {
-		return anyValue
+	rawBytes := []byte(trimmed)
+	// Optimization: avoid json.Unmarshal if valid JSON, returns json.RawMessage to avoid memory allocations
+	if json.Valid(rawBytes) {
+		return json.RawMessage(rawBytes)
 	}
 	return trimmed
 }
