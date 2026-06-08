@@ -231,14 +231,20 @@ func printCompactJSON(cmd *cobra.Command, value interface{}) error {
 	return err
 }
 
+// coerceJSONValue optimizes JSON parsing by using json.RawMessage when
+// a string contains valid JSON. This avoids expensive Unmarshal/Marshal cycles
+// into generic map[string]interface{} types for simply pretty-printing payloads.
 func coerceJSONValue(raw string) interface{} {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
 		return ""
 	}
-	var value interface{}
-	if err := json.Unmarshal([]byte(trimmed), &value); err == nil {
-		return value
+
+	// If it's valid JSON, return it as a RawMessage so the standard json encoder
+	// prints it without a full generic object parsing/allocation overhead.
+	b := []byte(trimmed)
+	if json.Valid(b) {
+		return json.RawMessage(b)
 	}
 	return trimmed
 }
