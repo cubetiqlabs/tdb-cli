@@ -223,12 +223,9 @@ func printJSON(cmd *cobra.Command, value interface{}) error {
 }
 
 func printCompactJSON(cmd *cobra.Command, value interface{}) error {
-	data, err := json.Marshal(value)
-	if err != nil {
-		return err
-	}
-	_, err = fmt.Fprintln(cmd.OutOrStdout(), string(data))
-	return err
+	// Performance optimization: stream json to stdout without indent
+	// instead of json.Marshal + allocating large string payload
+	return json.NewEncoder(cmd.OutOrStdout()).Encode(value)
 }
 
 func coerceJSONValue(raw string) interface{} {

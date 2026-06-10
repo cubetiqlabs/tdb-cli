@@ -348,7 +348,7 @@ func (c *TenantClient) GetDocumentByPrimaryKey(ctx context.Context, collection, 
 
 // CreateDocument inserts a new document into a collection.
 func (c *TenantClient) CreateDocument(ctx context.Context, collection string, payload []byte, appID string) (*Document, error) {
-	req, err := c.newJSONRequest(ctx, http.MethodPost, fmt.Sprintf("/api/collections/%s/documents", url.PathEscape(collection)), jsonRaw(payload))
+	req, err := c.newJSONRequest(ctx, http.MethodPost, fmt.Sprintf("/api/collections/%s/documents", url.PathEscape(collection)), JSONRaw(payload))
 	if err != nil {
 		return nil, err
 	}
@@ -363,7 +363,7 @@ func (c *TenantClient) CreateDocument(ctx context.Context, collection string, pa
 
 // UpdateDocument replaces a document by ID.
 func (c *TenantClient) UpdateDocument(ctx context.Context, collection, id string, payload []byte, appID string) (*Document, error) {
-	req, err := c.newJSONRequest(ctx, http.MethodPut, fmt.Sprintf("/api/collections/%s/documents/%s", url.PathEscape(collection), url.PathEscape(id)), jsonRaw(payload))
+	req, err := c.newJSONRequest(ctx, http.MethodPut, fmt.Sprintf("/api/collections/%s/documents/%s", url.PathEscape(collection), url.PathEscape(id)), JSONRaw(payload))
 	if err != nil {
 		return nil, err
 	}
@@ -378,7 +378,7 @@ func (c *TenantClient) UpdateDocument(ctx context.Context, collection, id string
 
 // PatchDocument applies a partial update to a document.
 func (c *TenantClient) PatchDocument(ctx context.Context, collection, id string, payload []byte, appID string) (*Document, error) {
-	req, err := c.newJSONRequest(ctx, http.MethodPatch, fmt.Sprintf("/api/collections/%s/documents/%s", url.PathEscape(collection), url.PathEscape(id)), jsonRaw(payload))
+	req, err := c.newJSONRequest(ctx, http.MethodPatch, fmt.Sprintf("/api/collections/%s/documents/%s", url.PathEscape(collection), url.PathEscape(id)), JSONRaw(payload))
 	if err != nil {
 		return nil, err
 	}
@@ -426,7 +426,7 @@ func (c *TenantClient) PurgeDocument(ctx context.Context, collection, id string,
 
 // BulkCreateDocuments inserts multiple documents in one request.
 func (c *TenantClient) BulkCreateDocuments(ctx context.Context, collection string, payload []byte, appID string) (*DocumentBulkResponse, error) {
-	req, err := c.newJSONRequest(ctx, http.MethodPost, fmt.Sprintf("/api/collections/%s/documents/bulk", url.PathEscape(collection)), jsonRaw(payload))
+	req, err := c.newJSONRequest(ctx, http.MethodPost, fmt.Sprintf("/api/collections/%s/documents/bulk", url.PathEscape(collection)), JSONRaw(payload))
 	if err != nil {
 		return nil, err
 	}
@@ -510,7 +510,7 @@ func (c *TenantClient) GetSavedQueryByName(ctx context.Context, name, appID stri
 
 // CreateSavedQuery creates or upserts a saved query document.
 func (c *TenantClient) CreateSavedQuery(ctx context.Context, payload []byte, appID string) (*Document, error) {
-	req, err := c.newJSONRequest(ctx, http.MethodPost, "/api/queries", jsonRaw(payload))
+	req, err := c.newJSONRequest(ctx, http.MethodPost, "/api/queries", JSONRaw(payload))
 	if err != nil {
 		return nil, err
 	}
@@ -533,7 +533,7 @@ func (c *TenantClient) PutSavedQuery(ctx context.Context, name string, payload [
 	if encoded := values.Encode(); encoded != "" {
 		path += "?" + encoded
 	}
-	req, err := c.newJSONRequest(ctx, http.MethodPut, path, jsonRaw(payload))
+	req, err := c.newJSONRequest(ctx, http.MethodPut, path, JSONRaw(payload))
 	if err != nil {
 		return nil, err
 	}
@@ -556,7 +556,7 @@ func (c *TenantClient) PatchSavedQuery(ctx context.Context, name string, payload
 	if encoded := values.Encode(); encoded != "" {
 		path += "?" + encoded
 	}
-	req, err := c.newJSONRequest(ctx, http.MethodPatch, path, jsonRaw(payload))
+	req, err := c.newJSONRequest(ctx, http.MethodPatch, path, JSONRaw(payload))
 	if err != nil {
 		return nil, err
 	}
@@ -581,7 +581,7 @@ func (c *TenantClient) ExecuteSavedQueryByID(ctx context.Context, id string, pay
 	}
 	var body interface{}
 	if len(payload) > 0 {
-		body = jsonRaw(payload)
+		body = JSONRaw(payload)
 	}
 	req, err := c.newJSONRequest(ctx, http.MethodPost, path, body)
 	if err != nil {
@@ -608,7 +608,7 @@ func (c *TenantClient) ExecuteSavedQueryByName(ctx context.Context, name string,
 	}
 	var body interface{}
 	if len(payload) > 0 {
-		body = jsonRaw(payload)
+		body = JSONRaw(payload)
 	}
 	req, err := c.newJSONRequest(ctx, http.MethodPost, path, body)
 	if err != nil {
@@ -723,7 +723,7 @@ func (c *TenantClient) ReportQuery(ctx context.Context, params ReportQueryParams
 	if encoded := values.Encode(); encoded != "" {
 		path += "?" + encoded
 	}
-	req, err := c.newJSONRequest(ctx, http.MethodPost, path, jsonRaw(encodedBody))
+	req, err := c.newJSONRequest(ctx, http.MethodPost, path, JSONRaw(encodedBody))
 	if err != nil {
 		return nil, err
 	}
@@ -797,9 +797,9 @@ func (c *TenantClient) AuthStatus(ctx context.Context, appID string) (*AuthStatu
 	return &status, nil
 }
 
-type jsonRaw []byte
+type JSONRaw []byte
 
-func (r jsonRaw) MarshalJSON() ([]byte, error) {
+func (r JSONRaw) MarshalJSON() ([]byte, error) {
 	return r, nil
 }
 
