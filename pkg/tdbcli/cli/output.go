@@ -128,6 +128,20 @@ func renderTable(cmd *cobra.Command, headers []string, rows [][]string) {
 
 func buildRowLine(cells []string, widths []int) string {
 	var b strings.Builder
+
+	// Pre-calculate exact capacity needed to avoid allocations during Builder growth.
+	// "│" is 3 bytes in UTF-8
+	cap := 3
+	for i, w := range widths {
+		cell := ""
+		if i < len(cells) {
+			cell = cells[i]
+		}
+		// A safe estimation: " " (1) + cell length + w (potential pad) + " │" (4)
+		cap += 5 + len(cell) + w
+	}
+	b.Grow(cap)
+
 	b.WriteString("│")
 	for i, w := range widths {
 		cell := ""
@@ -143,11 +157,32 @@ func buildRowLine(cells []string, widths []int) string {
 }
 
 func buildBorder(widths []int, left, mid, right string) string {
-	segments := make([]string, len(widths))
-	for i, w := range widths {
-		segments[i] = strings.Repeat("─", w+2)
+	if len(widths) == 0 {
+		return left + right
 	}
-	return left + strings.Join(segments, mid) + right
+
+	// Pre-calculate exact capacity needed to avoid intermediate string/slice allocations
+	cap := len(left) + len(right) + (len(widths)-1)*len(mid)
+	for _, w := range widths {
+		cap += (w + 2) * 3 // '─' is 3 bytes in UTF-8
+	}
+
+	var b strings.Builder
+	b.Grow(cap)
+	b.WriteString(left)
+
+	for i, w := range widths {
+		if i > 0 {
+			b.WriteString(mid)
+		}
+		// Write the unicode character '─' (U+2500) multiple times directly
+		for j := 0; j < w+2; j++ {
+			b.WriteString("─")
+		}
+	}
+	b.WriteString(right)
+
+	return b.String()
 }
 
 func padCell(text string, width int) string {
