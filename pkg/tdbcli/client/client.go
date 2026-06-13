@@ -94,11 +94,17 @@ func (b *baseClient) buildURL(path string) string {
 func (b *baseClient) newJSONRequest(ctx context.Context, method, path string, payload interface{}) (*http.Request, error) {
 	var body io.Reader
 	if payload != nil {
-		buf := &bytes.Buffer{}
-		if err := json.NewEncoder(buf).Encode(payload); err != nil {
-			return nil, fmt.Errorf("encode payload: %w", err)
+		// PERF: if payload is already raw json bytes (jsonRaw), avoid reflection/json encoding
+		// overhead and write directly. jsonRaw is defined in tenant.go.
+		if bData, ok := payload.(jsonRaw); ok {
+			body = bytes.NewReader(bData)
+		} else {
+			buf := &bytes.Buffer{}
+			if err := json.NewEncoder(buf).Encode(payload); err != nil {
+				return nil, fmt.Errorf("encode payload: %w", err)
+			}
+			body = buf
 		}
-		body = buf
 	}
 	req, err := http.NewRequestWithContext(ctx, method, b.buildURL(path), body)
 	if err != nil {
