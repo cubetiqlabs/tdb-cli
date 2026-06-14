@@ -143,13 +143,47 @@ func (c *Config) ResolveKey(tenantID, keyName string) (APIKeyEntry, error) {
 	return entry, nil
 }
 
-// MaskedAdminSecret returns a masked representation for display.
-func (c *Config) MaskedAdminSecret() string {
-	if c.AdminSecret == "" {
+// MaskSecret safely masks a string, showing only the first 3 and last 3 characters.
+func MaskSecret(secret string) string {
+	if secret == "" {
 		return ""
 	}
-	if len(c.AdminSecret) <= 6 {
-		return strings.Repeat("*", len(c.AdminSecret))
+	if len(secret) <= 6 {
+		return strings.Repeat("*", len(secret))
 	}
-	return c.AdminSecret[:3] + strings.Repeat("*", len(c.AdminSecret)-6) + c.AdminSecret[len(c.AdminSecret)-3:]
+	return secret[:3] + strings.Repeat("*", len(secret)-6) + secret[len(secret)-3:]
+}
+
+// MaskedAdminSecret returns a masked representation for display.
+func (c *Config) MaskedAdminSecret() string {
+	return MaskSecret(c.AdminSecret)
+}
+
+// MaskedCopy returns a deep copy of the configuration with admin secrets and API keys safely masked.
+func (c *Config) MaskedCopy() Config {
+	clone := Config{
+		Endpoint:      c.Endpoint,
+		AdminSecret:   MaskSecret(c.AdminSecret),
+		DefaultTenant: c.DefaultTenant,
+		Tenants:       make(map[string]TenantConfig, len(c.Tenants)),
+	}
+
+	for tid, tc := range c.Tenants {
+		tcClone := TenantConfig{
+			Name:       tc.Name,
+			DefaultKey: tc.DefaultKey,
+			Keys:       make(map[string]APIKeyEntry, len(tc.Keys)),
+		}
+		for kid, keyEntry := range tc.Keys {
+			tcClone.Keys[kid] = APIKeyEntry{
+				Key:         MaskSecret(keyEntry.Key),
+				Prefix:      keyEntry.Prefix,
+				AppID:       keyEntry.AppID,
+				Description: keyEntry.Description,
+			}
+		}
+		clone.Tenants[tid] = tcClone
+	}
+
+	return clone
 }
