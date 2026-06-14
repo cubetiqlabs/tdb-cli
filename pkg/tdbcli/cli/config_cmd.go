@@ -36,7 +36,7 @@ func newConfigShowCommand(env *Environment) *cobra.Command {
 	return &cobra.Command{
 		Use:   "show",
 		Short: "Print the current CLI config as YAML",
-		Long:  `Display the current TinyDB CLI configuration including endpoint, stored API keys, and tenant settings. Admin secrets are masked for security.`,
+		Long:  `Display the current TinyDB CLI configuration including endpoint, stored API keys, and tenant settings. Admin secrets and API keys are masked for security.`,
 		Example: `  # Show current configuration
   tdb config show
 
@@ -47,8 +47,7 @@ func newConfigShowCommand(env *Environment) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			display := *env.Config
-			display.AdminSecret = env.Config.MaskedAdminSecret()
+			display := env.Config.MaskedCopy()
 			data, err := yaml.Marshal(display)
 			if err != nil {
 				return err
@@ -591,7 +590,7 @@ The active (default) tenant is indicated with a marker (*).`,
 			}
 
 			if raw {
-				return printJSON(cmd, envCtx.Config.Tenants)
+				return printJSON(cmd, envCtx.Config.MaskedCopy().Tenants)
 			}
 
 			defaultTenant := strings.TrimSpace(envCtx.Config.DefaultTenant)
