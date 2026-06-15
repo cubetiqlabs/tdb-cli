@@ -1,0 +1,4 @@
+## 2024-05-24 - Stop Secrets Leakage via Shallow Config Copying
+**Vulnerability:** The CLI `tdb config show` command leaked API keys in plaintext to the console by using a shallow copy of the config struct (`display := *env.Config`) that failed to mask nested map values (`Config.Tenants[].Keys[].Key`).
+**Learning:** Shallow copying a struct in Go (`copy := *structPtr`) does not copy the contents of references, slices, or maps. Modifying data within these nested structures through the copied struct mutates the original in-memory object and any references. When rendering sensitive structs for output, deep copies are strictly required if nested maps/slices contain secrets that need masking.
+**Prevention:** Always implement explicit deep copy methods (e.g. `CloneAndMask()`) for structures containing sensitive data within references, slices, or maps when they need to be displayed or logged.
