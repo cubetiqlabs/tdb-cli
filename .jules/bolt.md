@@ -1,0 +1,3 @@
+## 2023-10-25 - Prevent double-encoding overhead with jsonRaw payloads
+**Learning:** In the Go CLI, `jsonRaw` is an underlying `[]byte` containing pre-encoded JSON payloads. When passing it to `newJSONRequest`, `json.NewEncoder` was being applied indiscriminately, resulting in unnecessary reflection and double-encoding overhead. We can avoid this overhead by using a type assertion to pass the `[]byte` directly via `bytes.NewReader`.
+**Action:** Always check if JSON payloads are pre-encoded (e.g. `jsonRaw` or `[]byte`) and pass them directly to request bodies instead of re-encoding them using `json.NewEncoder` to save execution time and avoid potential memory allocations.
