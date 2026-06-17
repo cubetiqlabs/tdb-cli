@@ -145,11 +145,50 @@ func (c *Config) ResolveKey(tenantID, keyName string) (APIKeyEntry, error) {
 
 // MaskedAdminSecret returns a masked representation for display.
 func (c *Config) MaskedAdminSecret() string {
-	if c.AdminSecret == "" {
+	return maskString(c.AdminSecret)
+}
+
+// MaskedClone returns a deep copy of the configuration with all secrets masked.
+// This is critical to prevent credential leakage when displaying or serializing config state.
+func (c *Config) MaskedClone() Config {
+	clone := Config{
+		Endpoint:      c.Endpoint,
+		AdminSecret:   c.MaskedAdminSecret(),
+		DefaultTenant: c.DefaultTenant,
+	}
+
+	if c.Tenants != nil {
+		clone.Tenants = make(map[string]TenantConfig, len(c.Tenants))
+		for tenantID, tc := range c.Tenants {
+			tcClone := TenantConfig{
+				Name:       tc.Name,
+				DefaultKey: tc.DefaultKey,
+			}
+			if tc.Keys != nil {
+				tcClone.Keys = make(map[string]APIKeyEntry, len(tc.Keys))
+				for keyID, keyEntry := range tc.Keys {
+					keyClone := APIKeyEntry{
+						Key:         maskString(keyEntry.Key),
+						Prefix:      keyEntry.Prefix,
+						AppID:       keyEntry.AppID,
+						Description: keyEntry.Description,
+					}
+					tcClone.Keys[keyID] = keyClone
+				}
+			}
+			clone.Tenants[tenantID] = tcClone
+		}
+	}
+
+	return clone
+}
+
+func maskString(s string) string {
+	if s == "" {
 		return ""
 	}
-	if len(c.AdminSecret) <= 6 {
-		return strings.Repeat("*", len(c.AdminSecret))
+	if len(s) <= 6 {
+		return strings.Repeat("*", len(s))
 	}
-	return c.AdminSecret[:3] + strings.Repeat("*", len(c.AdminSecret)-6) + c.AdminSecret[len(c.AdminSecret)-3:]
+	return s[:3] + strings.Repeat("*", len(s)-6) + s[len(s)-3:]
 }
