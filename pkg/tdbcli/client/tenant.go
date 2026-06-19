@@ -797,12 +797,6 @@ func (c *TenantClient) AuthStatus(ctx context.Context, appID string) (*AuthStatu
 	return &status, nil
 }
 
-type jsonRaw []byte
-
-func (r jsonRaw) MarshalJSON() ([]byte, error) {
-	return r, nil
-}
-
 // CreateApplication provisions an application for the tenant.
 func (c *TenantClient) CreateApplication(ctx context.Context, request CreateApplicationRequest) (*Application, *GeneratedKey, error) {
 	req, err := c.newJSONRequest(ctx, http.MethodPost, "/api/applications", request)
