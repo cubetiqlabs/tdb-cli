@@ -94,11 +94,17 @@ func (b *baseClient) buildURL(path string) string {
 func (b *baseClient) newJSONRequest(ctx context.Context, method, path string, payload interface{}) (*http.Request, error) {
 	var body io.Reader
 	if payload != nil {
-		buf := &bytes.Buffer{}
-		if err := json.NewEncoder(buf).Encode(payload); err != nil {
-			return nil, fmt.Errorf("encode payload: %w", err)
+		// Performance optimization: check if payload is already pre-encoded JSON (jsonRaw)
+		// to avoid reflection and double-encoding overhead.
+		if raw, ok := payload.(jsonRaw); ok {
+			body = bytes.NewReader(raw)
+		} else {
+			buf := &bytes.Buffer{}
+			if err := json.NewEncoder(buf).Encode(payload); err != nil {
+				return nil, fmt.Errorf("encode payload: %w", err)
+			}
+			body = buf
 		}
-		body = buf
 	}
 	req, err := http.NewRequestWithContext(ctx, method, b.buildURL(path), body)
 	if err != nil {
