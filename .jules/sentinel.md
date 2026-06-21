@@ -1,0 +1,4 @@
+## 2024-05-20 - Prevent Credential Leakage in CLI Output
+**Vulnerability:** The CLI `tdb config show` command was leaking plaintext tenant API keys because it performed a shallow copy (`display := *env.Config`) before serialization, leaving the deeply nested `Keys` map unmasked and exposed.
+**Learning:** Shallow copying a struct with nested map fields (like Go's `map` pointing to another `map`) only copies the top-level references. The nested maps still point to the same original memory, leading to unintended exposure of sensitive fields such as API keys when serialized.
+**Prevention:** Always use deep cloning strategies—such as implementing a custom `MaskedClone()` method that explicitly iterates and copies nested maps while redacting secrets—before passing configuration structs containing credentials to serialization functions like `yaml.Marshal` or `json.Marshal`.
