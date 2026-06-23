@@ -1,0 +1,5 @@
+## 2025-02-14 - Prevent Credential Leakage in Serialized JSON Output
+
+**Vulnerability:** The CLI commands for showing and listing the configuration were using shallow copies (`display := *env.Config`) when outputting `yaml` or `json`. Because the nested maps like `Tenants` and `Keys` are pointers under the hood, any mutations or simple referencing during serialization could lead to exposing raw API keys and secrets directly in the terminal output.
+**Learning:** In Go, shallow cloning a struct containing nested maps or slices does not deep-clone those underlying elements. Thus, serializing a shallow clone to avoid mutating the original, but masking specific fields within nested properties, can accidentally leak original secrets or fail to mask them across the entire output context if not deeply cloned.
+**Prevention:** Implement a dedicated deep cloning method, such as `MaskedClone() Config`, that explicitly iterates over maps and explicitly masks secrets (like `AdminSecret` and `APIKeyEntry.Key`) so that the cloned configuration sent to standard output (e.g., as JSON/YAML) is entirely scrubbed of credentials.
