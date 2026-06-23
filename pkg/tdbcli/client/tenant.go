@@ -797,10 +797,15 @@ func (c *TenantClient) AuthStatus(ctx context.Context, appID string) (*AuthStatu
 	return &status, nil
 }
 
+// jsonRaw represents a pre-encoded JSON payload
 type jsonRaw []byte
 
 func (r jsonRaw) MarshalJSON() ([]byte, error) {
 	return r, nil
+}
+
+func (r jsonRaw) Bytes() []byte {
+	return r
 }
 
 // CreateApplication provisions an application for the tenant.
