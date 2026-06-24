@@ -153,3 +153,46 @@ func (c *Config) MaskedAdminSecret() string {
 	}
 	return c.AdminSecret[:3] + strings.Repeat("*", len(c.AdminSecret)-6) + c.AdminSecret[len(c.AdminSecret)-3:]
 }
+
+// MaskedAPIKey returns a masked representation for an API key.
+func MaskedAPIKey(key string) string {
+	if key == "" {
+		return ""
+	}
+	if len(key) <= 8 {
+		return strings.Repeat("*", len(key))
+	}
+	return key[:4] + strings.Repeat("*", len(key)-8) + key[len(key)-4:]
+}
+
+// MaskedClone returns a deep copy of the configuration with all secrets masked.
+// This is essential for safe serialization, as shallow copies would still reference the original maps containing plaintext secrets.
+func (c *Config) MaskedClone() *Config {
+	clone := &Config{
+		Endpoint:      c.Endpoint,
+		AdminSecret:   c.MaskedAdminSecret(),
+		DefaultTenant: c.DefaultTenant,
+		Tenants:       make(map[string]TenantConfig, len(c.Tenants)),
+	}
+
+	for tenantID, tc := range c.Tenants {
+		tcClone := TenantConfig{
+			Name:       tc.Name,
+			DefaultKey: tc.DefaultKey,
+			Keys:       make(map[string]APIKeyEntry, len(tc.Keys)),
+		}
+
+		for keyID, keyEntry := range tc.Keys {
+			tcClone.Keys[keyID] = APIKeyEntry{
+				Key:         MaskedAPIKey(keyEntry.Key),
+				Prefix:      keyEntry.Prefix,
+				AppID:       keyEntry.AppID,
+				Description: keyEntry.Description,
+			}
+		}
+
+		clone.Tenants[tenantID] = tcClone
+	}
+
+	return clone
+}
