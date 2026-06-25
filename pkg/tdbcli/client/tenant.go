@@ -803,6 +803,17 @@ func (r jsonRaw) MarshalJSON() ([]byte, error) {
 	return r, nil
 }
 
+// Bytes returns the raw payload or "null" if empty to avoid invalid JSON.
+func (r jsonRaw) Bytes() []byte {
+	if len(r) == 0 {
+		return []byte("null")
+	}
+	return r
+}
+
+// isJSONRaw serves as a marker method to prevent accidental interface matching.
+func (r jsonRaw) isJSONRaw() {}
+
 // CreateApplication provisions an application for the tenant.
 func (c *TenantClient) CreateApplication(ctx context.Context, request CreateApplicationRequest) (*Application, *GeneratedKey, error) {
 	req, err := c.newJSONRequest(ctx, http.MethodPost, "/api/applications", request)
