@@ -803,6 +803,15 @@ func (r jsonRaw) MarshalJSON() ([]byte, error) {
 	return r, nil
 }
 
+func (r jsonRaw) Bytes() []byte {
+	if len(r) == 0 {
+		return []byte("null")
+	}
+	return []byte(r)
+}
+
+func (r jsonRaw) isJSONRaw() {}
+
 // CreateApplication provisions an application for the tenant.
 func (c *TenantClient) CreateApplication(ctx context.Context, request CreateApplicationRequest) (*Application, *GeneratedKey, error) {
 	req, err := c.newJSONRequest(ctx, http.MethodPost, "/api/applications", request)
