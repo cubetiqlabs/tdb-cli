@@ -1,0 +1,4 @@
+## 2024-05-18 - Deep Cloning Go Config Maps to Prevent Credential Leaks
+**Vulnerability:** The CLI `config show` and `config list --raw` commands leaked stored API keys in plaintext because only `AdminSecret` was explicitly masked, and the rest of the configuration (`TenantConfig.Keys`) was shallow-copied or directly serialized.
+**Learning:** Shallow dereferencing (`display := *env.Config`) in Go only copies the top-level struct fields. If the struct contains pointers, slices, or maps (like the `Tenants` map containing `Keys`), the underlying data structures remain shared. Modifying or serializing them exposes the original data.
+**Prevention:** When serializing configurations containing nested maps or slices with secrets in Go, ensure a true deep clone (e.g., implementing a custom `MaskedClone()` method that iterates through nested maps) is used rather than shallow pointer dereferencing.
