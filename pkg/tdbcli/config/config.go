@@ -153,3 +153,46 @@ func (c *Config) MaskedAdminSecret() string {
 	}
 	return c.AdminSecret[:3] + strings.Repeat("*", len(c.AdminSecret)-6) + c.AdminSecret[len(c.AdminSecret)-3:]
 }
+
+// MaskedKey returns a masked representation of the API key for display.
+func (a APIKeyEntry) MaskedKey() string {
+	if a.Key == "" {
+		return ""
+	}
+	if len(a.Key) <= 6 {
+		return strings.Repeat("*", len(a.Key))
+	}
+	return a.Key[:3] + strings.Repeat("*", len(a.Key)-6) + a.Key[len(a.Key)-3:]
+}
+
+// MaskedClone creates a deep copy of the TenantConfig with the API keys masked.
+func (t TenantConfig) MaskedClone() TenantConfig {
+	clone := TenantConfig{
+		Name:       t.Name,
+		DefaultKey: t.DefaultKey,
+	}
+	if t.Keys != nil {
+		clone.Keys = make(map[string]APIKeyEntry, len(t.Keys))
+		for k, v := range t.Keys {
+			v.Key = v.MaskedKey()
+			clone.Keys[k] = v
+		}
+	}
+	return clone
+}
+
+// MaskedClone creates a deep copy of the Config with the AdminSecret and API keys masked.
+func (c *Config) MaskedClone() Config {
+	clone := Config{
+		Endpoint:      c.Endpoint,
+		AdminSecret:   c.MaskedAdminSecret(),
+		DefaultTenant: c.DefaultTenant,
+	}
+	if c.Tenants != nil {
+		clone.Tenants = make(map[string]TenantConfig, len(c.Tenants))
+		for k, v := range c.Tenants {
+			clone.Tenants[k] = v.MaskedClone()
+		}
+	}
+	return clone
+}
