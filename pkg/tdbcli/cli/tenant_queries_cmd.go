@@ -571,9 +571,11 @@ func buildParamsTemplate(sq clientpkg.SavedQuery) map[string]any {
 	return template
 }
 
+// Compile regex once at startup for performance optimization
+var sqlParamRe = regexp.MustCompile(`:([a-zA-Z_][a-zA-Z0-9_]*)`)
+
 func extractSQLParams(sql string) []string {
-	re := regexp.MustCompile(`:([a-zA-Z_][a-zA-Z0-9_]*)`)
-	matches := re.FindAllStringSubmatch(sql, -1)
+	matches := sqlParamRe.FindAllStringSubmatch(sql, -1)
 	seen := make(map[string]struct{})
 	ordered := make([]string, 0, len(matches))
 	for _, match := range matches {
