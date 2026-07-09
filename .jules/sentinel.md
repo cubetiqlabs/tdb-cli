@@ -1,0 +1,4 @@
+## 2024-05-24 - Prevent credential leakage from shallow copies
+**Vulnerability:** Shallow pointer dereferencing (`display := *env.Config`) left nested map references intact. During serialization (`yaml.Marshal`), unmasked secrets within the nested maps (e.g., API keys in `Tenants`) were exposed.
+**Learning:** When creating copies of configuration objects for safe display or serialization, deep cloning is required. Shallow copies do not copy nested structures like maps or slices, leading to potential secret leakage if those nested structures contain sensitive data.
+**Prevention:** Always implement and use a deep cloning method (like `MaskedClone`) that performs an initial shallow copy (to preserve non-secret fields) followed by manual reallocation and deep copying of nested structures, applying appropriate masking to all secrets.
