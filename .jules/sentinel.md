@@ -1,0 +1,4 @@
+## 2024-07-10 - Credential Leakage in Raw Config List
+**Vulnerability:** The CLI was printing unmasked tenant API keys when users ran `tdb config list --raw` because the underlying raw `envCtx.Config.Tenants` map was passed directly to the JSON marshaller.
+**Learning:** Shallow copies of structs containing maps (like `display := *env.Config`) do not copy the underlying map data, so manipulating elements within the nested maps modifies the original. To mask secrets effectively before serializing complex nested configurations, a deep copy operation is required to safely prevent leaking credentials.
+**Prevention:** Always implement and use deep cloning (like a `MaskedClone()` function) when dealing with complex nested configurations containing secrets before passing them to display functions or serialization protocols.
