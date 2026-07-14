@@ -591,7 +591,11 @@ The active (default) tenant is indicated with a marker (*).`,
 			}
 
 			if raw {
-				return printJSON(cmd, envCtx.Config.Tenants)
+				maskedTenants := make(map[string]configpkg.TenantConfig, len(envCtx.Config.Tenants))
+				for id, tc := range envCtx.Config.Tenants {
+					maskedTenants[id] = *tc.MaskedClone()
+				}
+				return printJSON(cmd, maskedTenants)
 			}
 
 			defaultTenant := strings.TrimSpace(envCtx.Config.DefaultTenant)
