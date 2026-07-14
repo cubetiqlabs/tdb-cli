@@ -26,6 +26,32 @@ type TenantConfig struct {
 	Keys       map[string]APIKeyEntry `yaml:"keys,omitempty"`
 }
 
+// MaskedClone creates a deep copy of TenantConfig and masks API keys
+func (tc *TenantConfig) MaskedClone() *TenantConfig {
+	if tc == nil {
+		return nil
+	}
+	clone := *tc
+	if tc.Keys != nil {
+		clone.Keys = make(map[string]APIKeyEntry, len(tc.Keys))
+		for k, v := range tc.Keys {
+			maskedKey := v.Key
+			if len(maskedKey) <= 6 {
+				maskedKey = strings.Repeat("*", len(maskedKey))
+			} else {
+				maskedKey = maskedKey[:3] + strings.Repeat("*", len(maskedKey)-6) + maskedKey[len(maskedKey)-3:]
+			}
+			clone.Keys[k] = APIKeyEntry{
+				Key:         maskedKey,
+				Prefix:      v.Prefix,
+				AppID:       v.AppID,
+				Description: v.Description,
+			}
+		}
+	}
+	return &clone
+}
+
 // APIKeyEntry stores a named API key for either tenant- or app-scoped access.
 type APIKeyEntry struct {
 	Key         string `yaml:"key"`
