@@ -591,7 +591,7 @@ The active (default) tenant is indicated with a marker (*).`,
 			}
 
 			if raw {
-				return printJSON(cmd, envCtx.Config.Tenants)
+				return printJSON(cmd, envCtx.Config.MaskedClone().Tenants)
 			}
 
 			defaultTenant := strings.TrimSpace(envCtx.Config.DefaultTenant)
