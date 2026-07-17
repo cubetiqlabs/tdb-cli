@@ -16,6 +16,10 @@ import (
 	clientpkg "github.com/cubetiqlabs/tdb-cli/pkg/tdbcli/client"
 )
 
+// Compile the regex globally to avoid recompiling on every call to extractSQLParams.
+// This is a performance optimization.
+var sqlParamRegex = regexp.MustCompile(`:([a-zA-Z_][a-zA-Z0-9_]*)`)
+
 func newTenantQueriesListCommand(env *Environment) *cobra.Command {
 	var auth authFlags
 	var raw bool
@@ -572,8 +576,7 @@ func buildParamsTemplate(sq clientpkg.SavedQuery) map[string]any {
 }
 
 func extractSQLParams(sql string) []string {
-	re := regexp.MustCompile(`:([a-zA-Z_][a-zA-Z0-9_]*)`)
-	matches := re.FindAllStringSubmatch(sql, -1)
+	matches := sqlParamRegex.FindAllStringSubmatch(sql, -1)
 	seen := make(map[string]struct{})
 	ordered := make([]string, 0, len(matches))
 	for _, match := range matches {
