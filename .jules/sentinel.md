@@ -1,0 +1,4 @@
+## 2024-07-19 - Fix credential leakage in config serialization
+**Vulnerability:** The `tdb config show` command serialized the configuration state where only the AdminSecret was masked, exposing tenant API keys in plain text.
+**Learning:** Shallow copying a configuration struct (e.g., `clone := *c`) does not copy nested maps; it only copies the pointers. Masking nested secrets requires deep cloning of the nested structures.
+**Prevention:** When serializing configurations containing nested maps with secrets, always perform a deep clone (e.g., `MaskedClone`) and mask secrets manually rather than relying on shallow copies.
