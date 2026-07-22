@@ -1,0 +1,4 @@
+## 2025-02-20 - Fix credential leakage in CLI serialized outputs
+**Vulnerability:** API keys stored in the configuration were leaked in plaintext when users ran `tdb config show` or `tdb config list --raw`. The application only masked the `admin_secret` but failed to mask nested map credentials during serialization.
+**Learning:** When serializing structs with nested maps containing secrets (like `map[string]TenantConfig`), a simple shallow copy (`display := *config`) is insufficient. It copies the map pointer, leading to unmasked credentials in the output.
+**Prevention:** Implement recursive deep clone methods (`MaskedClone()`) that explicitly reallocate nested maps and mask secrets down the object hierarchy before passing the configuration to serialization functions like `yaml.Marshal` or `json.Marshal`.
