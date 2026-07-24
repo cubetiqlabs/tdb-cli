@@ -153,3 +153,33 @@ func (c *Config) MaskedAdminSecret() string {
 	}
 	return c.AdminSecret[:3] + strings.Repeat("*", len(c.AdminSecret)-6) + c.AdminSecret[len(c.AdminSecret)-3:]
 }
+
+// MaskedClone returns a deep copy of the configuration with all secrets masked for safe display.
+func (c *Config) MaskedClone() Config {
+	clone := *c
+	clone.AdminSecret = c.MaskedAdminSecret()
+
+	if c.Tenants != nil {
+		clone.Tenants = make(map[string]TenantConfig, len(c.Tenants))
+		for tid, tc := range c.Tenants {
+			tcClone := tc
+			if tc.Keys != nil {
+				tcClone.Keys = make(map[string]APIKeyEntry, len(tc.Keys))
+				for k, entry := range tc.Keys {
+					entryClone := entry
+					if entry.Key != "" {
+						if len(entry.Key) <= 6 {
+							entryClone.Key = strings.Repeat("*", len(entry.Key))
+						} else {
+							entryClone.Key = entry.Key[:3] + strings.Repeat("*", len(entry.Key)-6) + entry.Key[len(entry.Key)-3:]
+						}
+					}
+					tcClone.Keys[k] = entryClone
+				}
+			}
+			clone.Tenants[tid] = tcClone
+		}
+	}
+
+	return clone
+}
