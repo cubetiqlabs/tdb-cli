@@ -1,0 +1,4 @@
+## 2024-07-25 - Credential leakage in Config Serialization
+**Vulnerability:** The CLI configuration contains sensitive data like `AdminSecret` and tenant `APIKeyEntry`. When `tdb config show` displayed this config, it shallow-copied the `Config` struct and masked only `AdminSecret`. This caused the nested `Tenants` map, which is passed by reference, to be serialized without masking the `APIKeyEntry.Key` fields, leaking all configured API keys to stdout.
+**Learning:** Serializing nested structures containing secrets using `yaml.Marshal` or `json.Marshal` requires a deep clone rather than a shallow pointer copy to prevent unmasked nested fields from leaking.
+**Prevention:** Ensure deep cloning (e.g., implementing a `MaskedClone()` method) is used for any configuration struct before serializing it for display to users. Shallow copies (like `clone := *c`) leave nested maps pointing to the original, unmodified references.
