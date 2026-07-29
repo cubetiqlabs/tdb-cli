@@ -1,0 +1,4 @@
+## 2024-07-29 - Prevent secret leakage in raw config output
+**Vulnerability:** Raw CLI config outputs (`tdb config show`, `tdb config list --raw`) were leaking unmasked API keys by shallow-copying config structs or directly printing config maps.
+**Learning:** Shallow pointer dereferencing (`clone := *c`) does not deep copy nested maps. Serializers like `yaml.Marshal` or `json.Marshal` iterate through nested structures and will expose sensitive information if deep cloning is omitted.
+**Prevention:** Always implement explicit deep copy methods (e.g., `MaskedClone()`) for configurations containing nested maps with secrets, ensuring manual reallocation and deep copying of nested structures before serialization.
