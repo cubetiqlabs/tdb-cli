@@ -1,0 +1,4 @@
+## 2024-05-24 - Configuration Serialization Credential Leakage
+**Vulnerability:** The CLI configuration contains nested maps with secrets (`APIKeyEntry.Key`). When displayed to users, only the top-level `AdminSecret` was masked via shallow pointer dereferencing before serialization (e.g., `yaml.Marshal`). Nested API keys within `Tenants` were left exposed.
+**Learning:** Shallow copying a struct with nested maps or pointers does not clone the underlying data structures. Modifying or serializing the shallow copy can still leak or mutate nested secrets.
+**Prevention:** Always use a deep cloning method (like `MaskedClone()`) when serializing configurations containing nested secrets. Perform a shallow copy first to preserve unmapped non-secret fields, then manually reallocate and deeply copy nested maps/pointers while masking the secrets.
