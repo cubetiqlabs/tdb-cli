@@ -1,0 +1,4 @@
+## 2024-08-05 - Mask Secrets in Serialized Output
+**Vulnerability:** The CLI configuration commands (`config show`, `config list --raw`) were leaking sensitive API keys and Admin secrets in plain text because the `Config` struct was serialized directly without deep cloning and masking.
+**Learning:** When displaying configuration data to users, ensure a deep copy is made and all secrets are properly masked to prevent credential leakage in serialized outputs (e.g., YAML/JSON). Shallow pointer dereferencing drops unmapped non-secret fields and doesn't clone nested maps, requiring a manual reallocation and deep copy of nested structures.
+**Prevention:** Always implement and use a deep cloning method like `MaskedClone()` that manually reallocates nested maps/pointers before serializing or displaying structs containing sensitive data.
