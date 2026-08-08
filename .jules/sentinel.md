@@ -1,0 +1,4 @@
+## 2024-05-14 - Mask API keys in configuration output
+**Vulnerability:** Configuration structures containing nested API keys in maps (`Config.Tenants`) were being serialized to YAML and JSON (`tdb config show` and `tdb config list --raw`) without masking, exposing plaintext secrets on the command line.
+**Learning:** When displaying configurations with secrets, relying on a shallow copy (like `*c`) and modifying only top-level fields (like `AdminSecret`) is insufficient. Nested maps and slices are not cloned by value; they reference the original memory. Any modification for display or lack of masking will leak the original secrets.
+**Prevention:** Implement deep cloning (e.g., a `MaskedClone()` method) for any struct containing secrets in nested fields before serializing it for logging or terminal display, ensuring all secrets are properly masked in the cloned copy without affecting the active configuration.
