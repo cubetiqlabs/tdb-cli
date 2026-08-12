@@ -47,8 +47,7 @@ func newConfigShowCommand(env *Environment) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			display := *env.Config
-			display.AdminSecret = env.Config.MaskedAdminSecret()
+			display := *env.Config.MaskedClone()
 			data, err := yaml.Marshal(display)
 			if err != nil {
 				return err
@@ -591,7 +590,7 @@ The active (default) tenant is indicated with a marker (*).`,
 			}
 
 			if raw {
-				return printJSON(cmd, envCtx.Config.Tenants)
+				return printJSON(cmd, envCtx.Config.MaskedClone().Tenants)
 			}
 
 			defaultTenant := strings.TrimSpace(envCtx.Config.DefaultTenant)
