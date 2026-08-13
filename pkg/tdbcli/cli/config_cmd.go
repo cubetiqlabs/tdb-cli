@@ -43,12 +43,11 @@ func newConfigShowCommand(env *Environment) *cobra.Command {
   # Redirect to file
   tdb config show > config-backup.yaml`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			env, err := requireEnvironment(env)
+			envCtx, err := requireEnvironment(env)
 			if err != nil {
 				return err
 			}
-			display := *env.Config
-			display.AdminSecret = env.Config.MaskedAdminSecret()
+			display := envCtx.Config.MaskedClone()
 			data, err := yaml.Marshal(display)
 			if err != nil {
 				return err
