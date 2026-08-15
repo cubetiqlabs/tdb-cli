@@ -1,0 +1,4 @@
+## 2025-02-28 - Secure Configuration Serialization
+**Vulnerability:** The CLI `config show` command used a shallow copy `display := *env.Config` before serializing with `yaml.Marshal()`. This left the `Tenants` map containing raw `APIKeyEntry` structs uncopied, resulting in plaintext API credentials leaking into the output.
+**Learning:** Shallow pointer dereferencing in Go (`*config`) does not clone nested maps or pointers. Serializing this shallow copy exposed secrets that were theoretically supposed to be protected. Deep cloning must be explicitly implemented for complex structures holding credentials.
+**Prevention:** Always implement a dedicated deep clone method (e.g., `MaskedClone()`) that reallocates nested maps/slices and masks secret fields prior to generating display outputs or logs.
