@@ -1,0 +1,4 @@
+## 2024-08-16 - Prevent Credential Leakage in Config Serialization
+**Vulnerability:** The `tdb config show` command used a shallow copy of the configuration struct before printing it, which successfully masked the top-level `AdminSecret` but left all nested map values (such as `TenantConfig.Keys`) completely unmasked, exposing API keys in plaintext when printing configuration via `yaml.Marshal`.
+**Learning:** When dealing with nested structures containing sensitive data (like maps or slices of API keys) in Go, shallow copies are insufficient because maps and pointers still reference the original data. Modifying a shallow copy for display can leak data or mutate the original state.
+**Prevention:** Always implement and use a deep copy method (e.g., `MaskedClone()`) that manually reallocates and deeply copies all nested maps and pointers before applying masks for serialization or display.
