@@ -591,7 +591,25 @@ The active (default) tenant is indicated with a marker (*).`,
 			}
 
 			if raw {
-				return printJSON(cmd, envCtx.Config.Tenants)
+				// Deep copy to mask keys in output
+				safeTenants := make(map[string]configpkg.TenantConfig, len(envCtx.Config.Tenants))
+				for id, tc := range envCtx.Config.Tenants {
+					safeTC := tc // Shallow copy to preserve other fields
+					safeTC.Keys = make(map[string]configpkg.APIKeyEntry, len(tc.Keys))
+					for kAlias, entry := range tc.Keys {
+						maskedKey := ""
+						if len(entry.Key) > 6 {
+							maskedKey = entry.Key[:3] + strings.Repeat("*", len(entry.Key)-6) + entry.Key[len(entry.Key)-3:]
+						} else if len(entry.Key) > 0 {
+							maskedKey = strings.Repeat("*", len(entry.Key))
+						}
+						safeEntry := entry
+						safeEntry.Key = maskedKey
+						safeTC.Keys[kAlias] = safeEntry
+					}
+					safeTenants[id] = safeTC
+				}
+				return printJSON(cmd, safeTenants)
 			}
 
 			defaultTenant := strings.TrimSpace(envCtx.Config.DefaultTenant)
