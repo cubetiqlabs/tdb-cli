@@ -571,9 +571,13 @@ func buildParamsTemplate(sq clientpkg.SavedQuery) map[string]any {
 	return template
 }
 
+// sqlParamsRegex is compiled once at startup to improve performance by avoiding repeated
+// regexp compilations when extracting parameters from saved SQL queries.
+// Expected Impact: Reduces CPU usage and allocation overhead when extracting SQL params.
+var sqlParamsRegex = regexp.MustCompile(`:([a-zA-Z_][a-zA-Z0-9_]*)`)
+
 func extractSQLParams(sql string) []string {
-	re := regexp.MustCompile(`:([a-zA-Z_][a-zA-Z0-9_]*)`)
-	matches := re.FindAllStringSubmatch(sql, -1)
+	matches := sqlParamsRegex.FindAllStringSubmatch(sql, -1)
 	seen := make(map[string]struct{})
 	ordered := make([]string, 0, len(matches))
 	for _, match := range matches {
