@@ -571,9 +571,15 @@ func buildParamsTemplate(sq clientpkg.SavedQuery) map[string]any {
 	return template
 }
 
+// ⚡ Bolt Optimization:
+// 💡 What: Hoisted regexp.MustCompile out of extractSQLParams to global scope.
+// 🎯 Why: regexp.MustCompile is an expensive operation. Recompiling it on every function call creates unnecessary overhead and allocations.
+// 📊 Impact: Eliminates repeated regex compilation, significantly improving execution speed and reducing garbage collection pressure during parameter extraction.
+// 🔬 Measurement: Observe reduced CPU time and fewer memory allocations per call to extractSQLParams in profiler.
+var sqlParamRegex = regexp.MustCompile(`:([a-zA-Z_][a-zA-Z0-9_]*)`)
+
 func extractSQLParams(sql string) []string {
-	re := regexp.MustCompile(`:([a-zA-Z_][a-zA-Z0-9_]*)`)
-	matches := re.FindAllStringSubmatch(sql, -1)
+	matches := sqlParamRegex.FindAllStringSubmatch(sql, -1)
 	seen := make(map[string]struct{})
 	ordered := make([]string, 0, len(matches))
 	for _, match := range matches {
