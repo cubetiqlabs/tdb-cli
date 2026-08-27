@@ -51,7 +51,7 @@ func DefaultPath() (string, error) {
 		}
 	}
 	dir := filepath.Join(base, "tdb")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
 	return filepath.Join(dir, "config.yaml"), nil
@@ -81,7 +81,7 @@ func (c *Config) Save(path string) error {
 	if c.Tenants == nil {
 		c.Tenants = make(map[string]TenantConfig)
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 	raw, err := yaml.Marshal(c)
