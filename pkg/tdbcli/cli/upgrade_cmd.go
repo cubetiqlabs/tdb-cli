@@ -468,10 +468,19 @@ func extractFromTarGz(path, tmpDir string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		if _, err := io.Copy(out, tarReader); err != nil {
+
+		limit := int64(128 << 20) // 128 MB max extracted size
+		lr := io.LimitReader(tarReader, limit)
+		written, err := io.Copy(out, lr)
+		if err != nil {
 			out.Close()
 			return "", err
 		}
+		if written == limit {
+			out.Close()
+			return "", errors.New("extracted file exceeds maximum allowed size (128MB)")
+		}
+
 		out.Close()
 		return dest, nil
 	}
@@ -502,11 +511,21 @@ func extractFromZip(path, tmpDir string) (string, error) {
 			rc.Close()
 			return "", err
 		}
-		if _, err := io.Copy(out, rc); err != nil {
+
+		limit := int64(128 << 20) // 128 MB max extracted size
+		lr := io.LimitReader(rc, limit)
+		written, err := io.Copy(out, lr)
+		if err != nil {
 			rc.Close()
 			out.Close()
 			return "", err
 		}
+		if written == limit {
+			rc.Close()
+			out.Close()
+			return "", errors.New("extracted file exceeds maximum allowed size (128MB)")
+		}
+
 		rc.Close()
 		out.Close()
 		return dest, nil
