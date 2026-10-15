@@ -109,7 +109,7 @@ You can optionally mark a key as default for a tenant and associate it with a sp
 
 			keyValue := strings.TrimSpace(storeKey)
 			if fromStdin {
-				data, err := io.ReadAll(cmd.InOrStdin())
+				data, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), 10<<20))
 				if err != nil {
 					return err
 				}
