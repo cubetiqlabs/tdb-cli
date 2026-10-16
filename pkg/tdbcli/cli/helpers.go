@@ -345,7 +345,7 @@ func readJSONPayload(cmd *cobra.Command, inline, filePath string, useStdin, expe
 		}
 		payload = content
 	case useStdin:
-		data, err := io.ReadAll(cmd.InOrStdin())
+		data, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), 10<<20)) // 10MB safety limit
 		if err != nil {
 			return nil, err
 		}
