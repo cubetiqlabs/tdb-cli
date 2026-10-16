@@ -1,0 +1,3 @@
+## 2025-05-18 - Optimized Strings Builder for Go CLI Tables
+**Learning:** Go's `strings.Builder` is highly efficient, but concatenating multiple format chunks iteratively inside heavily nested loops without `.Grow()` still creates significant allocator churn overhead relative to doing memory pre-allocation.
+**Action:** When printing tables or structured outputs via strings in Go, precalculate the exact needed buffer capacity using `.Grow()` and pass it to `strings.Builder` directly to reduce heap allocations per row drastically. Use `Builder` everywhere possible to avoid `[]string` slicing and `strings.Join`.
