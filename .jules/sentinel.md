@@ -7,3 +7,7 @@
 **Vulnerability:** The `io.Copy(out, tarReader)` and `io.Copy(out, rc)` operations during binary extraction in the `upgrade` command didn't limit the number of bytes read. This makes it susceptible to a DoS vulnerability (G110) via decompression bombs (like zip bombs).
 **Learning:** During extraction of compressed binaries, an attacker could provide a highly compressed payload that expands to fill all available disk space or exhaust memory when extracted.
 **Prevention:** Always use `io.LimitReader` when reading from compressed archives or untrusted sources to enforce a maximum read limit and prevent resource exhaustion.
+## 2025-03-08 - Protect against unbounded ReadAll from stdin
+**Vulnerability:** The CLI read input data via `io.ReadAll(cmd.InOrStdin())` for document payloads and configuration values without any bounds checking, which creates a potential vector for memory exhaustion attacks (DoS) when fed excessively large streams.
+**Learning:** Functions that ingest arbitrary streams using unbounded readers are vulnerable to resource exhaustion. `io.LimitReader` must be explicitly paired with length checks since it silently truncates when the limit is reached instead of generating an error.
+**Prevention:** Wrap untrusted or unbounded stream reading with `io.LimitReader(r, limit+1)` and verify `int64(len(data)) > limit` to safely abort large input reads and prevent DoS vectors.
