@@ -143,11 +143,27 @@ func buildRowLine(cells []string, widths []int) string {
 }
 
 func buildBorder(widths []int, left, mid, right string) string {
-	segments := make([]string, len(widths))
+	var b strings.Builder
+	// ⚡ Bolt: Pre-calculate exact buffer capacity to avoid intermediate
+	// slice allocations and continuous buffer reallocations during table rendering
+	capacity := len(left) + len(right)
 	for i, w := range widths {
-		segments[i] = strings.Repeat("─", w+2)
+		if i > 0 {
+			capacity += len(mid)
+		}
+		capacity += (w + 2) * len("─")
 	}
-	return left + strings.Join(segments, mid) + right
+	b.Grow(capacity)
+
+	b.WriteString(left)
+	for i, w := range widths {
+		if i > 0 {
+			b.WriteString(mid)
+		}
+		b.WriteString(strings.Repeat("─", w+2))
+	}
+	b.WriteString(right)
+	return b.String()
 }
 
 func padCell(text string, width int) string {
