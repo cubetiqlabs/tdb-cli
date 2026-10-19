@@ -109,9 +109,13 @@ You can optionally mark a key as default for a tenant and associate it with a sp
 
 			keyValue := strings.TrimSpace(storeKey)
 			if fromStdin {
-				data, err := io.ReadAll(cmd.InOrStdin())
+				limit := int64(10 * 1024 * 1024) // 10MB limit
+				data, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), limit+1))
 				if err != nil {
 					return err
+				}
+				if int64(len(data)) > limit {
+					return errors.New("input exceeds the 10MB limit")
 				}
 				keyValue = strings.TrimSpace(string(data))
 			}
