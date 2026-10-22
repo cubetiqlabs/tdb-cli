@@ -128,6 +128,13 @@ func renderTable(cmd *cobra.Command, headers []string, rows [][]string) {
 
 func buildRowLine(cells []string, widths []int) string {
 	var b strings.Builder
+	// Pre-calculate exact capacity needed
+	cap := 3 // Starting '│' (3 bytes)
+	for _, w := range widths {
+		cap += 5 + w // ' ' (1) + padded text (w) + ' ' (1) + '│' (3)
+	}
+	b.Grow(cap)
+
 	b.WriteString("│")
 	for i, w := range widths {
 		cell := ""
@@ -143,11 +150,28 @@ func buildRowLine(cells []string, widths []int) string {
 }
 
 func buildBorder(widths []int, left, mid, right string) string {
-	segments := make([]string, len(widths))
-	for i, w := range widths {
-		segments[i] = strings.Repeat("─", w+2)
+	var b strings.Builder
+
+	// Pre-calculate exact capacity
+	cap := len(left) + len(right)
+	if len(widths) > 0 {
+		cap += (len(widths) - 1) * len(mid)
+		for _, w := range widths {
+			// '─' is 3 bytes in UTF-8
+			cap += (w + 2) * 3
+		}
 	}
-	return left + strings.Join(segments, mid) + right
+	b.Grow(cap)
+
+	b.WriteString(left)
+	for i, w := range widths {
+		if i > 0 {
+			b.WriteString(mid)
+		}
+		b.WriteString(strings.Repeat("─", w+2))
+	}
+	b.WriteString(right)
+	return b.String()
 }
 
 func padCell(text string, width int) string {
