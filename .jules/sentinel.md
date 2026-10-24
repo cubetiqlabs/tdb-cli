@@ -12,3 +12,8 @@
 **Vulnerability:** Unbounded calls to `io.ReadAll(cmd.InOrStdin())` were reading entire input streams into memory, making the CLI vulnerable to memory exhaustion (DoS) when fed excessively large input files or streams.
 **Learning:** Using `io.ReadAll` on untrusted input sources without limits can allow attackers to crash the process by providing large payloads.
 **Prevention:** Always wrap the reader with `io.LimitReader` and read up to `limit + 1` bytes. Explicitly check if the read length exceeds the limit and return an error to avoid silently truncating the input.
+
+## 2026-10-13 - Prevent Disk Exhaustion (DoS) in Upgrade Download
+**Vulnerability:** The `io.Copy(progressWriter, resp.Body)` operation during binary download in the `upgrade` command didn't limit the number of bytes read. This makes it susceptible to a DoS vulnerability (disk exhaustion) if an attacker provides a huge or infinite payload.
+**Learning:** During the downloading of updates, an attacker could provide an excessively large payload that expands to fill all available disk space when downloaded.
+**Prevention:** Always use `io.LimitReader` when reading from HTTP response bodies representing file downloads to enforce a maximum read limit and prevent disk resource exhaustion.

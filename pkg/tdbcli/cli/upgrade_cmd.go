@@ -337,7 +337,12 @@ func downloadAsset(ctx context.Context, out io.Writer, url, dest string) (string
 	defer f.Close()
 	progressWriter := newProgressWriter(f, resp.ContentLength, out, style("[download]", colorInfo, colorBold))
 	defer progressWriter.finish()
-	if _, err := io.Copy(progressWriter, resp.Body); err != nil {
+	limit := int64(100 * 1024 * 1024)
+	lr := io.LimitReader(resp.Body, limit+1)
+	if written, err := io.Copy(progressWriter, lr); err != nil || written > limit {
+		if err == nil {
+			err = errors.New("downloaded file too large")
+		}
 		return "", err
 	}
 	return dest, nil
