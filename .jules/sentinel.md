@@ -12,3 +12,8 @@
 **Vulnerability:** Unbounded calls to `io.ReadAll(cmd.InOrStdin())` were reading entire input streams into memory, making the CLI vulnerable to memory exhaustion (DoS) when fed excessively large input files or streams.
 **Learning:** Using `io.ReadAll` on untrusted input sources without limits can allow attackers to crash the process by providing large payloads.
 **Prevention:** Always wrap the reader with `io.LimitReader` and read up to `limit + 1` bytes. Explicitly check if the read length exceeds the limit and return an error to avoid silently truncating the input.
+
+## 2024-10-25 - Prevent Silent Truncation/Incorrect Rejection in LimitReader
+**Vulnerability:** The limit on `io.LimitReader` coupled with `io.Copy` used `limit` bytes and checked `written == limit` which incorrectly rejects legitimate files that are exactly the limit size.
+**Learning:** Checking `written == limit` is a bug that rejects valid extraction cases.
+**Prevention:** Configure the reader to read up to `limit + 1` bytes and check if `written > limit` to return an explicit error.
