@@ -1,0 +1,3 @@
+## 2024-05-25 - Pre-calculate Capacity for Output Rendering
+**Learning:** In Go, string concatenation with `strings.Join` and dynamic `strings.Builder` growth without pre-allocation causes unnecessary heap allocations and slice resizing, especially when drawing repeated elements like terminal borders and padding in a tight loop. Pre-calculating the exact buffer capacity using `.Grow()` and writing characters byte-by-byte or string-by-string dramatically reduces allocations (from over 100 allocs to 1) and improves performance significantly.
+**Action:** When generating output borders, tables, or heavily concatenated string structures, compute the final capacity ahead of time and call `strings.Builder.Grow()` before appending data to eliminate dynamic allocation overhead.
