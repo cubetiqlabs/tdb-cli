@@ -128,6 +128,16 @@ func renderTable(cmd *cobra.Command, headers []string, rows [][]string) {
 
 func buildRowLine(cells []string, widths []int) string {
 	var b strings.Builder
+
+	// Pre-calculate capacity to avoid reallocations
+	// "│" + (" " + padded_cell + " │") per column
+	totalLen := 3 // len("│") is 3 bytes
+	for _, w := range widths {
+		// w + 4 bytes for padding, spaces and border char: " " (1) + w + " │" (4)
+		totalLen += w + 5
+	}
+	b.Grow(totalLen)
+
 	b.WriteString("│")
 	for i, w := range widths {
 		cell := ""
@@ -142,12 +152,28 @@ func buildRowLine(cells []string, widths []int) string {
 	return b.String()
 }
 
+// buildBorder constructs a table border utilizing a pre-sized strings.Builder
+// to minimize allocations and overhead.
 func buildBorder(widths []int, left, mid, right string) string {
-	segments := make([]string, len(widths))
-	for i, w := range widths {
-		segments[i] = strings.Repeat("─", w+2)
+	var b strings.Builder
+	totalLen := len(left) + len(right)
+	for _, w := range widths {
+		totalLen += (w + 2) * 3 // '─' is 3 bytes
 	}
-	return left + strings.Join(segments, mid) + right
+	if len(widths) > 1 {
+		totalLen += (len(widths) - 1) * len(mid)
+	}
+	b.Grow(totalLen)
+
+	b.WriteString(left)
+	for i, w := range widths {
+		if i > 0 {
+			b.WriteString(mid)
+		}
+		b.WriteString(strings.Repeat("─", w+2))
+	}
+	b.WriteString(right)
+	return b.String()
 }
 
 func padCell(text string, width int) string {
