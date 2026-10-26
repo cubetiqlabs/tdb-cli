@@ -128,32 +128,53 @@ func renderTable(cmd *cobra.Command, headers []string, rows [][]string) {
 
 func buildRowLine(cells []string, widths []int) string {
 	var b strings.Builder
+	// "│" is 3 bytes in UTF-8
+	capacity := 3
+	for _, w := range widths {
+		// " " + content + padding + " │"
+		// " │" is 4 bytes in UTF-8 (space + 3-byte char)
+		capacity += 1 + w + 4
+	}
+	b.Grow(capacity)
+
 	b.WriteString("│")
 	for i, w := range widths {
 		cell := ""
 		if i < len(cells) {
 			cell = cells[i]
 		}
-		padded := padCell(cell, w)
 		b.WriteString(" ")
-		b.WriteString(padded)
+
+		pad := w - runewidth.StringWidth(cell)
+		b.WriteString(cell)
+		if pad > 0 {
+			b.WriteString(strings.Repeat(" ", pad))
+		}
 		b.WriteString(" │")
 	}
 	return b.String()
 }
 
 func buildBorder(widths []int, left, mid, right string) string {
-	segments := make([]string, len(widths))
-	for i, w := range widths {
-		segments[i] = strings.Repeat("─", w+2)
+	if len(widths) == 0 {
+		return left + right
 	}
-	return left + strings.Join(segments, mid) + right
-}
+	var b strings.Builder
+	capacity := len(left) + len(right)
+	for _, w := range widths {
+		// "─" is 3 bytes in UTF-8
+		capacity += (w + 2) * 3
+	}
+	capacity += (len(widths) - 1) * len(mid)
+	b.Grow(capacity)
 
-func padCell(text string, width int) string {
-	pad := width - runewidth.StringWidth(text)
-	if pad > 0 {
-		return text + strings.Repeat(" ", pad)
+	b.WriteString(left)
+	for i, w := range widths {
+		if i > 0 {
+			b.WriteString(mid)
+		}
+		b.WriteString(strings.Repeat("─", w+2))
 	}
-	return text
+	b.WriteString(right)
+	return b.String()
 }
