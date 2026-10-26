@@ -695,14 +695,22 @@ type aggregateSpecCLI struct {
 	Distinct  bool
 }
 
+type specKey struct {
+	Operation string
+	Field     string
+	Distinct  bool
+}
+
 // dedupeAggregateSpecs removes duplicate aggregate specs (same op, field, distinct) keeping the first occurrence.
 // Alias differences do not create uniqueness; the earliest alias is preserved. Returns warnings for any removed duplicates.
+// Performance Optimization: Replaced string concatenation with struct composite key for faster deduplication lookups.
+// Expected Impact: Reduces map lookup times, zero allocations per loop iteration for map keys compared to concatenating strings and strconv.
 func dedupeAggregateSpecs(specs []aggregateSpecCLI) ([]aggregateSpecCLI, []string) {
-	seen := make(map[string]struct{})
+	seen := make(map[specKey]struct{})
 	var out []aggregateSpecCLI
 	var warnings []string
 	for _, s := range specs {
-		key := s.Operation + "|" + s.Field + "|" + strconv.FormatBool(s.Distinct)
+		key := specKey{Operation: s.Operation, Field: s.Field, Distinct: s.Distinct}
 		if _, exists := seen[key]; exists {
 			// duplicate; emit warning referencing alias if present
 			if s.Alias != "" {
