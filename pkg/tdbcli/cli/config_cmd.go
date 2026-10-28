@@ -47,9 +47,9 @@ func newConfigShowCommand(env *Environment) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			display := *env.Config
-			display.AdminSecret = env.Config.MaskedAdminSecret()
-			data, err := yaml.Marshal(display)
+			display := env.Config.MaskedClone()
+			// AdminSecret and tenant keys are already masked by MaskedClone
+			data, err := yaml.Marshal(*display)
 			if err != nil {
 				return err
 			}
@@ -109,9 +109,13 @@ You can optionally mark a key as default for a tenant and associate it with a sp
 
 			keyValue := strings.TrimSpace(storeKey)
 			if fromStdin {
-				data, err := io.ReadAll(cmd.InOrStdin())
+				limit := int64(4 * 1024) // 4KB
+				data, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), limit+1))
 				if err != nil {
 					return err
+				}
+				if int64(len(data)) > limit {
+					return errors.New("api key from stdin exceeds the 4KB limit")
 				}
 				keyValue = strings.TrimSpace(string(data))
 			}
@@ -591,7 +595,7 @@ The active (default) tenant is indicated with a marker (*).`,
 			}
 
 			if raw {
-				return printJSON(cmd, envCtx.Config.Tenants)
+				return printJSON(cmd, envCtx.Config.MaskedClone().Tenants)
 			}
 
 			defaultTenant := strings.TrimSpace(envCtx.Config.DefaultTenant)
