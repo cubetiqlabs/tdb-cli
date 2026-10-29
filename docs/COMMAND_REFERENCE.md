@@ -644,6 +644,16 @@ tdb tenant queries get "Monthly Sales Report" \
 
 ## Snapshots
 
+### `tdb tenant snapshots verify`
+
+Dry-run a restore: check the snapshot's checksum, that its payload decodes and holds the recorded documents, and how many live documents a `replace_all` restore would delete. Exits non-zero when invalid.
+
+```bash
+tdb tenant snapshots verify --snapshot snap-123 --api-key $API_KEY
+```
+
+Flags: `--snapshot` (required), `--raw`.
+
 For complete snapshot documentation, see [SNAPSHOT_CLI.md](SNAPSHOT_CLI.md).
 
 ### `tdb tenant snapshots list`
@@ -702,7 +712,53 @@ tdb tenant snapshots restore snap-123 \
 
 ---
 
+## Usage, watch and reliability
+
+### `tdb tenant usage`
+
+Plan, effective limits, current usage and daily request counts (tenant-scoped key required).
+
+```bash
+tdb tenant usage --days 7 --api-key $API_KEY
+```
+
+### `tdb tenant watch <collection>`
+
+Stream changes as they happen. Each change has a `seq`; `--since SEQ` replays what you missed first, and if the connection drops the command reconnects and resumes from the last `seq` printed. A `LAGGED` line means this consumer was too slow; the missed changes follow.
+
+```bash
+tdb tenant watch orders --since 4812 --api-key $API_KEY
+tdb tenant watch orders --raw --api-key $API_KEY | jq .id
+```
+
+Flags: `--since`, `--raw`, `--app-id`. Stop with Ctrl+C. Needs a server with the realtime-resume release.
+
+### Retries and `--idempotency-key`
+
+Network errors and `429`/`502`/`503`/`504` are retried twice with exponential backoff and jitter, honouring `Retry-After`. A `429` without `Retry-After` (a daily quota) is not retried. `POST` requests are retried only when they carry an idempotency key:
+
+```bash
+tdb tenant documents create orders --data '{"sku":"A1"}' --idempotency-key order-2026-10-29-001 --api-key $API_KEY
+```
+
+A repeat with the same key returns the first result instead of creating a second document.
+
 ## Audit Logs
+
+### `tdb tenant audit verify`
+
+Walk the tenant's tamper-evident audit hash chain. Exits non-zero when an entry was altered or removed.
+
+```bash
+tdb tenant audit verify --api-key $API_KEY
+# OK: 1523 entries verified (seq 1..1523), 4 not yet sealed
+# last_hash: 9f2c...
+
+# Later: fail if the chain no longer ends where it did (detects truncation)
+tdb tenant audit verify --expect-hash 9f2c... --api-key $API_KEY
+```
+
+Flags: `--expect-hash`, `--raw`. Entries written in the last few seconds are "unsealed" and not yet covered.
 
 ### `tdb tenant audit`
 

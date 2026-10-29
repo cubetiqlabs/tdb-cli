@@ -348,12 +348,23 @@ func (c *TenantClient) GetDocumentByPrimaryKey(ctx context.Context, collection, 
 
 // CreateDocument inserts a new document into a collection.
 func (c *TenantClient) CreateDocument(ctx context.Context, collection string, payload []byte, appID string) (*Document, error) {
+	return c.CreateDocumentIdempotent(ctx, collection, payload, appID, "")
+}
+
+// CreateDocumentIdempotent creates a document under an Idempotency-Key. The
+// server stores the first response for 24 hours and replays it for a repeat,
+// and the client then retries transient failures safely. An empty key behaves
+// like CreateDocument.
+func (c *TenantClient) CreateDocumentIdempotent(ctx context.Context, collection string, payload []byte, appID, idempotencyKey string) (*Document, error) {
 	req, err := c.newJSONRequest(ctx, http.MethodPost, fmt.Sprintf("/api/collections/%s/documents", url.PathEscape(collection)), jsonRaw(payload))
 	if err != nil {
 		return nil, err
 	}
 	c.authorize(req)
 	c.applyAppScope(req, appID)
+	if key := strings.TrimSpace(idempotencyKey); key != "" {
+		req.Header.Set("Idempotency-Key", key)
+	}
 	var doc Document
 	if err := c.do(req, &doc); err != nil {
 		return nil, err

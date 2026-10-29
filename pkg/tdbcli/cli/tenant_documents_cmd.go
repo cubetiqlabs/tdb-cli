@@ -178,6 +178,7 @@ func newTenantDocumentsListCommand(env *Environment) *cobra.Command {
 
 func newTenantDocumentsCreateCommand(env *Environment) *cobra.Command {
 	var auth authFlags
+	var idempotencyKey string
 	var data string
 	var file string
 	var stdin bool
@@ -232,7 +233,7 @@ If the collection has a primary key configured with auto-generation, the ID will
 			if err != nil {
 				return err
 			}
-			doc, err := tenantClient.CreateDocument(cmd.Context(), collection, payload, auth.appID)
+			doc, err := tenantClient.CreateDocumentIdempotent(cmd.Context(), collection, payload, auth.appID, idempotencyKey)
 			if err != nil {
 				return err
 			}
@@ -253,6 +254,7 @@ If the collection has a primary key configured with auto-generation, the ID will
 	cmd.Flags().BoolVar(&stdin, "stdin", false, "Read JSON payload from stdin")
 	cmd.Flags().BoolVar(&raw, "raw", false, "Print raw JSON response")
 	cmd.Flags().BoolVar(&rawPretty, "raw-pretty", false, "Print pretty JSON response")
+	cmd.Flags().StringVar(&idempotencyKey, "idempotency-key", "", "Make the create safe to retry: a repeat with the same key returns the first result instead of creating a second document")
 
 	return cmd
 }
