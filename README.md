@@ -225,9 +225,22 @@ tdb tenant audit --collection users --since 48h --sort created_at --raw-pretty
 
 Relative durations (`1h`, `2d`, etc.) are resolved against the current time; fallback to RFC3339 timestamps for absolute ranges. Use `--raw` for compact JSON and `--raw-pretty` for pretty-printed output.
 
+Verify the audit log's tamper-evident hash chain (non-zero exit when broken):
+
+```bash
+tdb tenant audit verify --api-key $API_KEY
+```
+
+### Usage and live changes
+
+```bash
+tdb tenant usage --api-key $API_KEY                      # plan, limits, usage
+tdb tenant watch orders --since 4812 --api-key $API_KEY  # resumable change stream
+```
+
 ### Snapshots
 
-Create, restore, list, and delete collection snapshots for backup and disaster recovery:
+Create, restore, list, verify, and delete collection snapshots for backup and disaster recovery (`tdb tenant snapshots verify --snapshot ID` checks integrity without restoring):
 
 ```bash
 # List all snapshots

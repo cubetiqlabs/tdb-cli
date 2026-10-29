@@ -51,7 +51,8 @@ func DefaultPath() (string, error) {
 		}
 	}
 	dir := filepath.Join(base, "tdb")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	// dir is the per-user config directory (XDG_CONFIG_HOME or ~/.config) plus "tdb", never request input.
+	if err := os.MkdirAll(dir, 0o750); err != nil { // #nosec G703 -- path comes from the user's own config location
 		return "", err
 	}
 	return filepath.Join(dir, "config.yaml"), nil

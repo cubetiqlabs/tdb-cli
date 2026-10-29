@@ -57,6 +57,8 @@ func registerTenantCommands(root *cobra.Command, env *Environment) {
 	documentsCmd.AddCommand(newTenantDocumentsExportCommand(env))
 	documentsCmd.AddCommand(newTenantDocumentsSyncCommand(env))
 	tenantCmd.AddCommand(documentsCmd)
+	tenantCmd.AddCommand(newTenantUsageCommand(env))
+	tenantCmd.AddCommand(newTenantWatchCommand(env))
 
 	queriesCmd := &cobra.Command{
 		Use:   "queries",
@@ -73,6 +75,7 @@ func registerTenantCommands(root *cobra.Command, env *Environment) {
 	tenantCmd.AddCommand(queriesCmd)
 
 	auditCmd := newTenantAuditCommand(env)
+	auditCmd.AddCommand(newTenantAuditVerifyCommand(env))
 	tenantCmd.AddCommand(auditCmd)
 
 	authCmd := newTenantAuthCommand(env)

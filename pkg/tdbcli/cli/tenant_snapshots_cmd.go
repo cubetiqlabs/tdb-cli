@@ -21,6 +21,7 @@ func newTenantSnapshotsCommand(env *Environment) *cobra.Command {
 	cmd.AddCommand(newTenantSnapshotsRestoreCommand(env))
 	cmd.AddCommand(newTenantSnapshotsDeleteCommand(env))
 	cmd.AddCommand(newTenantSnapshotsGetCommand(env))
+	cmd.AddCommand(newTenantSnapshotsVerifyCommand(env))
 
 	return cmd
 }
@@ -207,8 +208,8 @@ func newTenantSnapshotsCreateCommand(env *Environment) *cobra.Command {
 	cmd.Flags().StringVar(&storageProvider, "storage", "", "Storage provider (local, s3, gcs)")
 	cmd.Flags().BoolVar(&raw, "raw", false, "Print raw JSON response")
 
-	cmd.MarkFlagRequired("collection")
-	cmd.MarkFlagRequired("name")
+	requireFlag(cmd, "collection")
+	requireFlag(cmd, "name")
 
 	return cmd
 }
@@ -269,7 +270,7 @@ func newTenantSnapshotsRestoreCommand(env *Environment) *cobra.Command {
 	cmd.Flags().StringVar(&targetCollectionID, "target-collection", "", "Target collection ID (defaults to original)")
 	cmd.Flags().BoolVar(&raw, "raw", false, "Print raw JSON response")
 
-	cmd.MarkFlagRequired("snapshot")
+	requireFlag(cmd, "snapshot")
 
 	return cmd
 }
@@ -319,7 +320,7 @@ func newTenantSnapshotsDeleteCommand(env *Environment) *cobra.Command {
 	cmd.Flags().StringVar(&snapshotID, "snapshot", "", "Snapshot ID (required)")
 	cmd.Flags().BoolVar(&force, "force", false, "Force deletion without confirmation")
 
-	cmd.MarkFlagRequired("snapshot")
+	requireFlag(cmd, "snapshot")
 
 	return cmd
 }
@@ -397,7 +398,7 @@ func newTenantSnapshotsGetCommand(env *Environment) *cobra.Command {
 	cmd.Flags().StringVar(&snapshotID, "snapshot", "", "Snapshot ID (required)")
 	cmd.Flags().BoolVar(&raw, "raw", false, "Print raw JSON response")
 
-	cmd.MarkFlagRequired("snapshot")
+	requireFlag(cmd, "snapshot")
 
 	return cmd
 }
