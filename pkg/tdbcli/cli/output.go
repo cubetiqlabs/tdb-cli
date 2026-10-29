@@ -127,14 +127,23 @@ func renderTable(cmd *cobra.Command, headers []string, rows [][]string) {
 }
 
 func buildRowLine(cells []string, widths []int) string {
+	// Pre-calculate exact capacity
+	var totalLen int = 3 // Initial "│"
+	for _, w := range widths {
+		totalLen += 1 + w + 4 // " " + padded_cell + " │"
+	}
+
 	var b strings.Builder
+	b.Grow(totalLen)
 	b.WriteString("│")
 	for i, w := range widths {
 		cell := ""
 		if i < len(cells) {
 			cell = cells[i]
 		}
+
 		padded := padCell(cell, w)
+
 		b.WriteString(" ")
 		b.WriteString(padded)
 		b.WriteString(" │")
@@ -143,11 +152,26 @@ func buildRowLine(cells []string, widths []int) string {
 }
 
 func buildBorder(widths []int, left, mid, right string) string {
-	segments := make([]string, len(widths))
-	for i, w := range widths {
-		segments[i] = strings.Repeat("─", w+2)
+	var totalLen int
+	totalLen += len(left) + len(right)
+	if len(widths) > 0 {
+		totalLen += (len(widths) - 1) * len(mid)
+		for _, w := range widths {
+			totalLen += (w + 2) * 3 // '─' is 3 bytes in UTF-8
+		}
 	}
-	return left + strings.Join(segments, mid) + right
+
+	var b strings.Builder
+	b.Grow(totalLen)
+	b.WriteString(left)
+	for i, w := range widths {
+		if i > 0 {
+			b.WriteString(mid)
+		}
+		b.WriteString(strings.Repeat("─", w+2))
+	}
+	b.WriteString(right)
+	return b.String()
 }
 
 func padCell(text string, width int) string {
