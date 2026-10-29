@@ -167,7 +167,11 @@ func runUpgrade(ctx context.Context, cmd *cobra.Command, checkOnly bool) error {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	archivePath, err := downloadAsset(ctx, statusOut, asset.BrowserDownloadURL, filepath.Join(tmpDir, asset.Name))
+	safeAssetName := filepath.Base(asset.Name)
+	if safeAssetName == "" || safeAssetName == "." || safeAssetName == "/" {
+		return fmt.Errorf("invalid asset name: %s", asset.Name)
+	}
+	archivePath, err := downloadAsset(ctx, statusOut, asset.BrowserDownloadURL, filepath.Join(tmpDir, safeAssetName))
 	if err != nil {
 		return fmt.Errorf("download asset: %w", err)
 	}
