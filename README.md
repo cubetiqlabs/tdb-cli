@@ -231,6 +231,15 @@ Verify the audit log's tamper-evident hash chain (non-zero exit when broken):
 tdb tenant audit verify --api-key $API_KEY
 ```
 
+### Webhooks and backup schedules
+
+```bash
+tdb tenant webhooks create --name orders --url https://example.com/hook --event document.created --api-key $API_KEY
+tdb tenant webhooks rotate-secret <id>      # secrets are shown once
+tdb tenant schedules create --collection-id <id> --name nightly --cron "0 3 * * *" --keep-daily 7
+tdb tenant schedules trigger <id>           # exits non-zero if the backup failed
+```
+
 ### Usage and live changes
 
 ```bash

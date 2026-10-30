@@ -218,3 +218,15 @@ func (c *TenantClient) watchOnce(ctx context.Context, collection, appID string, 
 	}
 	return sc.Err()
 }
+
+// Call sends an authenticated JSON request to a tenant API path and decodes the
+// answer into out (nil to discard it). It is for endpoints without a typed
+// method, and keeps the client's retry and error handling.
+func (c *TenantClient) Call(ctx context.Context, method, path string, body, out interface{}) error {
+	req, err := c.newJSONRequest(ctx, method, path, body)
+	if err != nil {
+		return err
+	}
+	c.authorize(req)
+	return c.do(req, out)
+}
