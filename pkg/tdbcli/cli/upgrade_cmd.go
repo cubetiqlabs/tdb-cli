@@ -470,13 +470,16 @@ func extractFromTarGz(path, tmpDir string) (string, error) {
 		}
 		lr := io.LimitReader(tarReader, 100*1024*1024+1)
 		if written, err := io.Copy(out, lr); err != nil || written > 100*1024*1024 {
-			out.Close()
+			_ = out.Close()
 			if err == nil {
 				err = errors.New("extracted file too large")
 			}
 			return "", err
 		}
-		out.Close()
+		// A failed close on a file we just wrote can mean it was not fully written.
+		if err := out.Close(); err != nil {
+			return "", err
+		}
 		return dest, nil
 	}
 	return "", errors.New("binary not found in tar archive")
@@ -503,20 +506,22 @@ func extractFromZip(path, tmpDir string) (string, error) {
 		dest := filepath.Join(tmpDir, base)
 		out, err := os.OpenFile(dest, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o755)
 		if err != nil {
-			rc.Close()
+			_ = rc.Close()
 			return "", err
 		}
 		lr := io.LimitReader(rc, 100*1024*1024+1)
 		if written, err := io.Copy(out, lr); err != nil || written > 100*1024*1024 {
-			rc.Close()
-			out.Close()
+			_ = rc.Close()
+			_ = out.Close()
 			if err == nil {
 				err = errors.New("extracted file too large")
 			}
 			return "", err
 		}
-		rc.Close()
-		out.Close()
+		_ = rc.Close() // read side: nothing to lose
+		if err := out.Close(); err != nil {
+			return "", err
+		}
 		return dest, nil
 	}
 	return "", errors.New("binary not found in zip archive")
@@ -675,11 +680,11 @@ func copyFile(src, dst string, perm os.FileMode) error {
 		return err
 	}
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
-		dstFile.Close()
+		_ = dstFile.Close()
 		return err
 	}
 	if err := dstFile.Chmod(perm); err != nil {
-		dstFile.Close()
+		_ = dstFile.Close()
 		return err
 	}
 	return dstFile.Close()
@@ -735,7 +740,9 @@ func parseVersionParts(v string) ([3]int, error) {
 			continue
 		}
 		var value int
-		fmt.Sscanf(segments[i], "%d", &value)
+		if _, err := fmt.Sscanf(segments[i], "%d", &value); err != nil {
+			value = 0 // a non-numeric segment such as "rc1" sorts as 0
+		}
 		parts[i] = value
 	}
 	return parts, nil

@@ -712,6 +712,43 @@ tdb tenant snapshots restore snap-123 \
 
 ---
 
+## Webhooks
+
+Needs a tenant-scoped API key.
+
+```bash
+tdb tenant webhooks create --name orders --url https://example.com/hook \
+  --event document.created --event document.updated --collection orders --api-key $API_KEY
+# Signing secret (shown once, store it now): 3f9c...
+
+tdb tenant webhooks list
+tdb tenant webhooks get <id>
+tdb tenant webhooks update <id> --enabled=false      # pause; --url, --name, --event also available
+tdb tenant webhooks rotate-secret <id>               # new secret, shown once; the old one stops working
+tdb tenant webhooks test <id>
+tdb tenant webhooks deliveries <id> --limit 20
+tdb tenant webhooks redeliver <delivery_id>          # queue the same event again
+tdb tenant webhooks delete <id>
+```
+
+`create` flags: `--name`, `--url`, `--event` (repeatable), `--collection` (repeatable), `--header Name=value` (repeatable), `--description`, `--max-retries`. `list`, `deliveries` take `--limit`, `--offset`, `--raw`.
+
+## Backup schedules
+
+Needs a tenant-scoped API key.
+
+```bash
+tdb tenant schedules create --collection-id <id> --name nightly --cron "0 3 * * *" \
+  --keep-daily 7 --keep-weekly 4 --api-key $API_KEY
+tdb tenant schedules list
+tdb tenant schedules disable <id>      # pause; `enable` resumes
+tdb tenant schedules trigger <id>      # run now; exits non-zero if the backup failed
+tdb tenant schedules executions <id>
+tdb tenant schedules delete <id>       # its snapshots are kept
+```
+
+Retention flags: `--keep-last`, `--keep-days`, `--keep-daily`, `--keep-weekly`, `--keep-monthly`. Retention only deletes snapshots this schedule created and is skipped when a run fails. `--paused` creates the schedule disabled.
+
 ## Usage, watch and reliability
 
 ### `tdb tenant usage`

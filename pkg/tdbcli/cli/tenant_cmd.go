@@ -59,6 +59,8 @@ func registerTenantCommands(root *cobra.Command, env *Environment) {
 	tenantCmd.AddCommand(documentsCmd)
 	tenantCmd.AddCommand(newTenantUsageCommand(env))
 	tenantCmd.AddCommand(newTenantWatchCommand(env))
+	tenantCmd.AddCommand(newTenantWebhooksCommand(env))
+	tenantCmd.AddCommand(newTenantSchedulesCommand(env))
 
 	queriesCmd := &cobra.Command{
 		Use:   "queries",
