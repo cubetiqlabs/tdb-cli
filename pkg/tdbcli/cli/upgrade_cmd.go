@@ -167,14 +167,15 @@ func runUpgrade(ctx context.Context, cmd *cobra.Command, checkOnly bool) error {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	archivePath, err := downloadAsset(ctx, statusOut, asset.BrowserDownloadURL, filepath.Join(tmpDir, asset.Name))
+	safeAssetName := filepath.Base(asset.Name)
+	archivePath, err := downloadAsset(ctx, statusOut, asset.BrowserDownloadURL, filepath.Join(tmpDir, safeAssetName))
 	if err != nil {
 		return fmt.Errorf("download asset: %w", err)
 	}
 	logSuccess(statusOut, "Download complete")
 	logStep(statusOut, "Extracting archive")
 
-	newBinary, err := extractBinary(archivePath, asset.Name, tmpDir)
+	newBinary, err := extractBinary(archivePath, safeAssetName, tmpDir)
 	if err != nil {
 		return fmt.Errorf("extract binary: %w", err)
 	}
