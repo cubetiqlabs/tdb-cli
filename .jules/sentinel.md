@@ -17,3 +17,8 @@
 **Vulnerability:** When combining `io.LimitReader` and `io.Copy` to prevent DoS via decompression bombs, checking if `written == limit` incorrectly blocked valid files that exactly match the limit size.
 **Learning:** Using `io.LimitReader(r, limit)` and failing on `written == limit` is a bug. `io.LimitReader` returns `EOF` after exactly `limit` bytes. To properly detect overflow, you must read up to `limit + 1` bytes and check if `written > limit`.
 **Prevention:** Always configure `io.LimitReader` to `limit + 1` when paired with `io.Copy`, and check `written > limit` to detect explicit overflow rather than matching the valid limit bound.
+
+## 2026-11-02 - Prevent Path Traversal in Asset Download
+**Vulnerability:** The upgrade command extracted an asset using `filepath.Join(tmpDir, asset.Name)` directly, making it vulnerable to path traversal if the GitHub API provided an `asset.Name` containing `../`.
+**Learning:** When downloading files or handling file paths derived from external sources (even trusted APIs like GitHub), the filename components must be treated as untrusted user input.
+**Prevention:** Always sanitize filenames from external inputs using `filepath.Base()` before joining them with local directories.
