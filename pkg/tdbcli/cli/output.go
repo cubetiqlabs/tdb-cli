@@ -83,16 +83,25 @@ func renderTable(cmd *cobra.Command, headers []string, rows [][]string) {
 	}
 
 	widths := make([]int, columnCount)
+	headerWidths := make([]int, columnCount)
 	for i := 0; i < columnCount; i++ {
-		widths[i] = runewidth.StringWidth(headers[i])
+		w := runewidth.StringWidth(headers[i])
+		widths[i] = w
+		headerWidths[i] = w
 	}
-	for _, row := range rows {
+
+	rowWidths := make([][]int, len(rows))
+	for i, row := range rows {
+		rw := make([]int, columnCount)
+		rowWidths[i] = rw
 		for j := 0; j < columnCount; j++ {
 			cell := ""
 			if j < len(row) {
 				cell = row[j]
 			}
-			if w := runewidth.StringWidth(cell); w > widths[j] {
+			w := runewidth.StringWidth(cell)
+			rw[j] = w
+			if w > widths[j] {
 				widths[j] = w
 			}
 		}
@@ -101,7 +110,7 @@ func renderTable(cmd *cobra.Command, headers []string, rows [][]string) {
 	top := buildBorder(widths, "┌", "┬", "┐")
 	fmt.Fprintln(out, styles.separator(top))
 
-	headerLine := buildRowLine(headers, widths)
+	headerLine := buildRowLine(headers, widths, headerWidths)
 	fmt.Fprintln(out, styles.header(headerLine))
 
 	if len(rows) > 0 {
@@ -118,7 +127,7 @@ func renderTable(cmd *cobra.Command, headers []string, rows [][]string) {
 				cells[j] = ""
 			}
 		}
-		line := buildRowLine(cells, widths)
+		line := buildRowLine(cells, widths, rowWidths[idx])
 		fmt.Fprintln(out, styles.row(line, idx%2 == 1))
 	}
 
@@ -126,7 +135,7 @@ func renderTable(cmd *cobra.Command, headers []string, rows [][]string) {
 	fmt.Fprintln(out, styles.separator(bottom))
 }
 
-func buildRowLine(cells []string, widths []int) string {
+func buildRowLine(cells []string, widths []int, textWidths []int) string {
 	// Pre-calculate exact capacity
 	var totalLen int = 3 // Initial "│"
 	for _, w := range widths {
@@ -138,14 +147,26 @@ func buildRowLine(cells []string, widths []int) string {
 	b.WriteString("│")
 	for i, w := range widths {
 		cell := ""
+		tw := 0
 		if i < len(cells) {
 			cell = cells[i]
+			if i < len(textWidths) {
+				tw = textWidths[i]
+			} else {
+				tw = runewidth.StringWidth(cell)
+			}
 		}
 
-		padded := padCell(cell, w)
-
 		b.WriteString(" ")
-		b.WriteString(padded)
+		b.WriteString(cell)
+
+		// Optimization: Inline padding and avoid strings.Repeat allocations
+		pad := w - tw
+		if pad > 0 {
+			for j := 0; j < pad; j++ {
+				b.WriteByte(' ')
+			}
+		}
 		b.WriteString(" │")
 	}
 	return b.String()
@@ -168,7 +189,10 @@ func buildBorder(widths []int, left, mid, right string) string {
 		if i > 0 {
 			b.WriteString(mid)
 		}
-		b.WriteString(strings.Repeat("─", w+2))
+		// Optimization: avoid strings.Repeat allocations
+		for j := 0; j < w+2; j++ {
+			b.WriteString("─")
+		}
 	}
 	b.WriteString(right)
 	return b.String()

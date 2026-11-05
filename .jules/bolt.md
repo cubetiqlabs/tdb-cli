@@ -1,3 +1,7 @@
 ## 2025-01-01 - Optimizing Go String Concatenation and Table Rendering
 **Learning:** To optimize string concatenation and table rendering in Go, pre-calculate the exact buffer capacity needed using `.Grow()` on a `strings.Builder` before writing. This avoids intermediate slice allocations, `strings.Join` overhead, and continuous buffer reallocations during heavily nested loops. Also, avoid using expensive O(N) functions like `runewidth.StringWidth()` to determine the capacity, as the calculation overhead will negate the allocation savings and cause performance regressions.
 **Action:** When building strings iteratively or generating tables, always pre-calculate the maximum or exact required capacity using simple arithmetic (e.g., cell width counts) and call `builder.Grow(capacity)`.
+
+## 2026-11-05 - Optimize Table Rendering Text Width Calculations and Output Buffer Allocations
+**Learning:** The CLI heavily recalculates text string widths during table rendering via `runewidth.StringWidth`, and intermediate short-lived strings are heavily allocated during `strings.Repeat` calls in loops when generating CLI table borders/padding.
+**Action:** Cache intermediate cell text widths array during the first traversal phase when discovering max cell widths, and use direct character writing via `strings.Builder.WriteString` and `strings.Builder.WriteByte` loops rather than using `strings.Repeat` during the render phase.
