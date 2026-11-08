@@ -260,7 +260,7 @@ func fetchLatestRelease(ctx context.Context) (*githubRelease, error) {
 		return nil, fmt.Errorf("unexpected status %s: %s", resp.Status, strings.TrimSpace(string(body)))
 	}
 	var release githubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&release); err != nil {
 		return nil, err
 	}
 	if sanitizeVersion(release.TagName) == "" {
