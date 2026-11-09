@@ -22,3 +22,8 @@
 **Vulnerability:** The `asset.Name` field from a GitHub release was being used directly in `filepath.Join(tmpDir, asset.Name)` during the binary upgrade download process.
 **Learning:** Using untrusted filenames (like those from external API responses) directly in file paths allows attackers or compromised servers to perform Path Traversal attacks (e.g., using `../../../`) to write files outside the intended temporary directory.
 **Prevention:** Always sanitize untrusted filenames using `filepath.Base()` before joining them with local directories.
+
+## 2026-11-09 - Prevent Memory Exhaustion (DoS) in JSON Decoding
+**Vulnerability:** The `json.NewDecoder(resp.Body).Decode(&release)` operation was unbounded, making it susceptible to a DoS vulnerability.
+**Learning:** Decoding JSON directly from an untrusted HTTP response body without limits can allow attackers to exhaust memory by providing excessively large payloads.
+**Prevention:** Always wrap the reader with `io.LimitReader` (e.g., 4MB limit) to prevent unbounded memory allocation.
