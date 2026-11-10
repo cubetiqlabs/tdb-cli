@@ -22,3 +22,8 @@
 **Vulnerability:** The `asset.Name` field from a GitHub release was being used directly in `filepath.Join(tmpDir, asset.Name)` during the binary upgrade download process.
 **Learning:** Using untrusted filenames (like those from external API responses) directly in file paths allows attackers or compromised servers to perform Path Traversal attacks (e.g., using `../../../`) to write files outside the intended temporary directory.
 **Prevention:** Always sanitize untrusted filenames using `filepath.Base()` before joining them with local directories.
+
+## 2026-11-10 - Unbounded JSON decoding in CLI upgrade command
+**Vulnerability:** The CLI upgrade command read JSON directly from an untrusted HTTP response body using `json.NewDecoder(resp.Body)` without any limits.
+**Learning:** Directly decoding untrusted streams without limits allows attackers to send infinite data, causing unbounded memory allocation and eventual DoS via memory exhaustion.
+**Prevention:** Always wrap `resp.Body` or other untrusted readers with `io.LimitReader(..., limit)` before passing them to `json.NewDecoder()`.
